@@ -33,6 +33,8 @@ const schema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   S3_PUBLIC_BASE_URL: z.string().optional(),
+  // Testing only: with no SMS key, print sign-in codes in the server log instead of failing. Turn off before real users.
+  LOG_OTP_WITHOUT_SMS: z.enum(['true', 'false']).default('false'),
   DEMAND_ALERTS_ENABLED: z.enum(['true', 'false']).default('true'),
   DEMAND_ALERT_MIN_RIDERS: z.coerce.number().int().min(1).default(2),
   WHATSAPP_ENABLED: z.enum(['true', 'false']).default('false'),

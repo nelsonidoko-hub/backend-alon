@@ -4,6 +4,10 @@ import { logger } from '../../utils/logger.js';
 /** Returns true if the message was sent (or logged in development), false if it failed. */
 export async function sendSms(phone, message) {
   if (!env.TERMII_API_KEY) {
+    if (env.NODE_ENV === 'production' && env.LOG_OTP_WITHOUT_SMS === 'true') {
+      logger.warn({ phone, message }, 'TEST MODE: SMS not sent, code shown here');
+      return true;
+    }
     if (env.NODE_ENV === 'production') {
       logger.error({ phone }, 'TERMII_API_KEY is not set, SMS not sent');
       return false;
