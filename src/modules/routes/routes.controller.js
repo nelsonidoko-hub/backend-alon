@@ -13,6 +13,7 @@ import {
 } from './routes.service.js';
 import { listLiveCabs } from '../sessions/sessions.service.js';
 import { toPublicCab } from '../sessions/publicCab.js';
+import { listMapCabs } from '../sessions/liveCabs.js';
 import { recordInterest } from '../demand/demand.service.js'; // FEATURE: DRIVER DEMAND ALERTS
 
 const point = (lat, lng) => ({ type: 'Point', coordinates: [lng, lat] });
@@ -43,6 +44,10 @@ export const publicCabs = asyncHandler(async (req, res) => {
   const cabs = await listLiveCabs(req.params.id, req.query.stopId, req.query.toStopId);
   // Visitors see seats, fare and a rough ETA, but not who is driving, the plate or the exact position.
   res.json({ cabs: req.user ? cabs : cabs.map(toPublicCab), signedIn: Boolean(req.user) });
+});
+
+export const liveCabs = asyncHandler(async (_req, res) => {
+  res.json({ cabs: await listMapCabs() });
 });
 
 export const adminListStops = asyncHandler(async (_req, res) => {

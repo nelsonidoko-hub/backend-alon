@@ -20,6 +20,8 @@ export const publicRouter = Router();
 // Visitors without an account may browse routes, stops, fares and nearby cabs (cab details are limited for them).
 publicRouter.use(optionalAuthenticate);
 publicRouter.get('/', c.publicList);
+// Must stay above '/:id' so "live" is not read as a route id.
+publicRouter.get('/live/cabs', c.liveCabs);
 publicRouter.get('/:id', validate(idParams, 'params'), c.publicDetail);
 publicRouter.get('/:id/fare', validate(idParams, 'params'), validate(fareQuerySchema, 'query'), c.publicFare);
 publicRouter.get('/:id/cabs', validate(idParams, 'params'), validate(cabsQuerySchema, 'query'), c.publicCabs);
