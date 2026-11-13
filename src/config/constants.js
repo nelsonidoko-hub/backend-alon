@@ -1,0 +1,10 @@
+export const CAB_FRESH_MS = 30 * 1000;
+export const CAB_STALE_MS = 60 * 1000;
+export const LOCATION_DB_WRITE_MS = 10 * 1000;
+export const LOCATION_MIN_GAP_MS = 1500;
+export const ARRIVING_METERS = 500;
+export const PASSED_METERS = 100;
+export const BOOKING_EXPIRY_MS = 45 * 60 * 1000;
+export const SHARE_AFTER_TRIP_MS = 60 * 60 * 1000;
+export const MAX_SEATS_PER_BOOKING = 2;
+export const ACTIVE_BOOKING_STATUSES = ['confirmed', 'arriving', 'picked_up'];
