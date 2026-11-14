@@ -23,6 +23,11 @@ const schema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default('mailto:admin@example.com'),
+  // SMS: 'auto' uses whichever provider has a key (Infobip first). Set to 'termii' later to make Termii the main one.
+  SMS_PROVIDER: z.enum(['auto', 'infobip', 'termii']).default('auto'),
+  INFOBIP_API_KEY: z.string().optional(),
+  INFOBIP_BASE_URL: z.string().optional(), // your own address from the Infobip portal, e.g. xxxxx.api.infobip.com
+  INFOBIP_SENDER_ID: z.string().default('InfoSMS'),
   TERMII_API_KEY: z.string().optional(),
   TERMII_SENDER_ID: z.string().default('Along'),
   TERMII_CHANNEL: z.enum(['generic', 'dnd', 'whatsapp']).default('generic'),

@@ -1,20 +1,41 @@
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
 
-/** Returns true if the message was sent (or logged in development), false if it failed. */
-export async function sendSms(phone, message) {
-  if (!env.TERMII_API_KEY) {
-    if (env.NODE_ENV === 'production' && env.LOG_OTP_WITHOUT_SMS === 'true') {
-      logger.warn({ phone, message }, 'TEST MODE: SMS not sent, code shown here');
-      return true;
-    }
-    if (env.NODE_ENV === 'production') {
-      logger.error({ phone }, 'TERMII_API_KEY is not set, SMS not sent');
+// Providers. Each returns true when the provider accepted the message, false otherwise (never throws).
+async function sendViaInfobip(phone, message) {
+  try {
+    const base = env.INFOBIP_BASE_URL.startsWith('http') ? env.INFOBIP_BASE_URL : `https://${env.INFOBIP_BASE_URL}`;
+    const res = await fetch(`${base.replace(/\/+$/, '')}/sms/2/text/advanced`, {
+      method: 'POST',
+      headers: {
+        Authorization: `App ${env.INFOBIP_API_KEY}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [{ destinations: [{ to: phone.replace('+', '') }], from: env.INFOBIP_SENDER_ID, text: message }],
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      logger.error({ status: res.status, body: JSON.stringify(data).slice(0, 300) }, 'Infobip SMS failed');
       return false;
     }
-    logger.info({ phone, message }, 'SMS (dev, not sent)');
+    // Infobip answers 200 even when it refuses one message; the per-message status says so.
+    const st = data.messages?.[0]?.status;
+    if (st && (st.groupName === 'REJECTED' || st.groupName === 'UNDELIVERABLE')) {
+      logger.error({ status: st.name, description: st.description }, 'Infobip SMS rejected');
+      return false;
+    }
     return true;
+  } catch (err) {
+    logger.error({ err }, 'Infobip SMS request error');
+    return false;
   }
+}
+
+async function sendViaTermii(phone, message) {
   try {
     const res = await fetch(`${env.TERMII_BASE_URL}/api/sms/send`, {
       method: 'POST',
@@ -38,4 +59,40 @@ export async function sendSms(phone, message) {
     logger.error({ err }, 'Termii SMS request error');
     return false;
   }
+}
+
+const PROVIDERS = {
+  infobip: { configured: () => Boolean(env.INFOBIP_API_KEY && env.INFOBIP_BASE_URL), send: sendViaInfobip },
+  termii: { configured: () => Boolean(env.TERMII_API_KEY), send: sendViaTermii },
+};
+
+// SMS_PROVIDER=infobip | termii picks the main one. 'auto' (default) uses whichever has a key, Infobip first.
+// If the main provider fails and the other one is configured, the other is tried once.
+function order() {
+  const names = Object.keys(PROVIDERS);
+  const first = env.SMS_PROVIDER === 'auto' ? names.find((n) => PROVIDERS[n].configured()) : env.SMS_PROVIDER;
+  if (!first) return [];
+  return [first, ...names.filter((n) => n !== first)].filter((n) => PROVIDERS[n].configured());
+}
+
+/** Returns true if the message was sent (or logged in development), false if it failed. */
+export async function sendSms(phone, message) {
+  const chain = order();
+  if (!chain.length) {
+    if (env.NODE_ENV === 'production' && env.LOG_OTP_WITHOUT_SMS === 'true') {
+      logger.warn({ phone, message }, 'TEST MODE: SMS not sent, code shown here');
+      return true;
+    }
+    if (env.NODE_ENV === 'production') {
+      logger.error({ phone }, 'No SMS provider configured (set INFOBIP_API_KEY or TERMII_API_KEY), SMS not sent');
+      return false;
+    }
+    logger.info({ phone, message }, 'SMS (dev, not sent)');
+    return true;
+  }
+  for (const name of chain) {
+    if (await PROVIDERS[name].send(phone, message)) return true;
+    logger.warn({ provider: name }, chain.length > 1 ? 'SMS provider failed, trying the next one' : 'SMS provider failed');
+  }
+  return false;
 }
