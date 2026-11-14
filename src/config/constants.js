@@ -4,6 +4,7 @@ export const LOCATION_DB_WRITE_MS = 10 * 1000;
 export const LOCATION_MIN_GAP_MS = 1500;
 export const ARRIVING_METERS = 500;
 export const PASSED_METERS = 100;
+export const OFF_ROUTE_METERS = 1500; // a cab further than this from the route line is not really on it
 export const BOOKING_EXPIRY_MS = 45 * 60 * 1000;
 export const SHARE_AFTER_TRIP_MS = 60 * 60 * 1000;
 export const MAX_SEATS_PER_BOOKING = 2;

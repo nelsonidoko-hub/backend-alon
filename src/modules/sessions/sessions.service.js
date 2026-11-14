@@ -9,7 +9,7 @@ import { settleBookingDoc } from '../wallet/wallet.service.js';
 import { lookingByStop } from '../demand/demand.service.js'; // FEATURE: DRIVER DEMAND ALERTS
 import { AppError } from '../../utils/AppError.js';
 import { project, etaSeconds } from '../../utils/geo.js';
-import { CAB_FRESH_MS, CAB_STALE_MS, PASSED_METERS } from '../../config/constants.js';
+import { CAB_FRESH_MS, CAB_STALE_MS, PASSED_METERS, OFF_ROUTE_METERS } from '../../config/constants.js';
 
 async function closeSession(session, reason) {
   await DriverSession.updateOne(
@@ -125,11 +125,14 @@ export async function listLiveCabs(routeId, stopId, toStopId) {
     .lean();
 
   const cabs = [];
+  let passed = 0; // live cabs on this route that are already past the pick-up stop
   for (const s of sessions) {
     const pos = getLivePosition(s);
     if (!pos) continue;
-    const remaining = stop.distAlong - project(g.path, pos).distAlong;
-    if (remaining < -PASSED_METERS) continue;
+    const hit = project(g.path, pos);
+    if (hit.distFrom > OFF_ROUTE_METERS) continue; // not actually on this route
+    const remaining = stop.distAlong - hit.distAlong;
+    if (remaining < -PASSED_METERS) { passed += 1; continue; }
     cabs.push({
       sessionId: String(s._id),
       seatsFree: s.seatsFree,
@@ -151,6 +154,7 @@ export async function listLiveCabs(routeId, stopId, toStopId) {
     });
   }
   cabs.sort((a, b) => a.etaSeconds - b.etaSeconds);
+  cabs.passed = passed; // read by the cab list screen to explain an empty list
   return cabs;
 }
 

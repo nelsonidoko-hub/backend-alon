@@ -43,7 +43,7 @@ export const publicCabs = asyncHandler(async (req, res) => {
   // <<< FEATURE: DRIVER DEMAND ALERTS (end)
   const cabs = await listLiveCabs(req.params.id, req.query.stopId, req.query.toStopId);
   // Visitors see seats, fare and a rough ETA, but not who is driving, the plate or the exact position.
-  res.json({ cabs: req.user ? cabs : cabs.map(toPublicCab), signedIn: Boolean(req.user) });
+  res.json({ cabs: req.user ? cabs : cabs.map(toPublicCab), signedIn: Boolean(req.user), passed: cabs.passed || 0 });
 });
 
 export const liveCabs = asyncHandler(async (_req, res) => {
@@ -145,6 +145,6 @@ export const adminDeleteFare = asyncHandler(async (req, res) => {
 });
 
 export const adminGenerateFares = asyncHandler(async (req, res) => {
-  const { routeId, base, perStop } = req.body;
-  res.json({ created: await generateFares(routeId, base, perStop) });
+  const { routeId, base, perStop, mode, perKm, minFare, roundTo } = req.body;
+  res.json({ created: await generateFares(routeId, base, perStop, { mode, perKm, minFare, roundTo }) });
 });
