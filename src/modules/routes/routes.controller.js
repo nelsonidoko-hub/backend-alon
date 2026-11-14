@@ -9,6 +9,7 @@ import {
   getRouteGeometry,
   getFare,
   generateFares,
+  previewFares,
   clearRouteCache,
 } from './routes.service.js';
 import { listLiveCabs } from '../sessions/sessions.service.js';
@@ -147,4 +148,9 @@ export const adminDeleteFare = asyncHandler(async (req, res) => {
 export const adminGenerateFares = asyncHandler(async (req, res) => {
   const { routeId, base, perStop, mode, perKm, minFare, roundTo } = req.body;
   res.json({ created: await generateFares(routeId, base, perStop, { mode, perKm, minFare, roundTo }) });
+});
+
+export const adminPreviewFares = asyncHandler(async (req, res) => {
+  const { routeId, base, perStop, mode, perKm, minFare, roundTo } = req.body;
+  res.json(await previewFares(routeId, base, perStop, { mode, perKm, minFare, roundTo }));
 });

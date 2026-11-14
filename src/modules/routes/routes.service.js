@@ -72,29 +72,46 @@ export async function getFare(routeId, fromStopId, toStopId) {
   return fare.amount;
 }
 
-export async function generateFares(routeId, base, perStop, opts = {}) {
+function priceFor(g, i, j, base, perStop, opts) {
+  if (opts.mode === 'distance') {
+    const km = (g.stops[j].distAlong - g.stops[i].distAlong) / 1000;
+    const step = opts.roundTo || 50;
+    return Math.max(opts.minFare || 0, Math.round((base + (opts.perKm || 0) * km) / step) * step);
+  }
+  return Math.round((base + perStop * (j - i - 1)) / 10) * 10;
+}
+
+// Shows what generateFares would save, without saving anything: route length, each stop's distance, every pair's price.
+export async function previewFares(routeId, base, perStop, opts = {}) {
   const g = await getRouteGeometry(routeId, { activeOnly: false });
-  const ops = [];
+  const first = g.stops[0]?.distAlong || 0;
+  const stops = g.stops.map((s) => ({ stopId: s.stopId, name: s.name, km: Math.round(((s.distAlong - first) / 1000) * 10) / 10 }));
+  const pairs = [];
   for (let i = 0; i < g.stops.length; i++) {
     for (let j = i + 1; j < g.stops.length; j++) {
-      let amount;
-      if (opts.mode === 'distance') {
-        const km = (g.stops[j].distAlong - g.stops[i].distAlong) / 1000;
-        const step = opts.roundTo || 50;
-        amount = Math.max(opts.minFare || 0, Math.round((base + opts.perKm * km) / step) * step);
-      } else {
-        const raw = base + perStop * (j - i - 1);
-        amount = Math.round(raw / 10) * 10;
-      }
-      ops.push({
-        updateOne: {
-          filter: { routeId, fromStopId: g.stops[i].stopId, toStopId: g.stops[j].stopId },
-          update: { $set: { amount } },
-          upsert: true,
-        },
+      pairs.push({
+        fromStopId: g.stops[i].stopId,
+        toStopId: g.stops[j].stopId,
+        from: g.stops[i].name,
+        to: g.stops[j].name,
+        km: Math.round(((g.stops[j].distAlong - g.stops[i].distAlong) / 1000) * 10) / 10,
+        amount: priceFor(g, i, j, base, perStop, opts),
       });
     }
   }
+  const routeKm = stops.length ? stops[stops.length - 1].km : 0;
+  return { routeKm, stops, pairs };
+}
+
+export async function generateFares(routeId, base, perStop, opts = {}) {
+  const { pairs } = await previewFares(routeId, base, perStop, opts);
+  const ops = pairs.map((p) => ({
+    updateOne: {
+      filter: { routeId, fromStopId: p.fromStopId, toStopId: p.toStopId },
+      update: { $set: { amount: p.amount } },
+      upsert: true,
+    },
+  }));
   if (ops.length) await Fare.bulkWrite(ops);
   return ops.length;
 }

@@ -38,6 +38,7 @@ adminRoutesRouter.patch('/:id', validate(idParams, 'params'), validate(routeUpda
 
 export const adminFaresRouter = Router();
 adminFaresRouter.get('/', validate(fareListQuerySchema, 'query'), c.adminListFares);
+adminFaresRouter.post('/preview', validate(generateFaresSchema), c.adminPreviewFares);
 adminFaresRouter.post('/generate', validate(generateFaresSchema), c.adminGenerateFares);
 adminFaresRouter.post('/', validate(fareSchema), c.adminUpsertFare);
 adminFaresRouter.patch('/:id', validate(idParams, 'params'), validate(fareUpdateSchema), c.adminUpdateFare);
