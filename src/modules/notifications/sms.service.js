@@ -38,7 +38,7 @@ async function sendViaInfobip(phone, message) {
 // Termii "Number API": sends from an auto-generated number, so no approved Sender ID is needed.
 async function sendViaTermiiNumber(phone, message) {
   try {
-    const res = await fetch(`${env.TERMII_BASE_URL}/api/sms/number/send`, {
+    const res = await fetch(`${env.TERMII_BASE_URL}${env.TERMII_NUMBER_PATH || '/api/sms/number/send'}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: phone.replace('+', ''), sms: message, api_key: env.TERMII_API_KEY }),
