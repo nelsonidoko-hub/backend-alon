@@ -62,6 +62,7 @@ export async function startSession(driver, { routeId, lat, lng, seats }) {
     routeId,
     seatsTotal: total,
     seatsFree: total,
+    seatsCapacity: capacity,
     lastSeen: new Date(),
     ...(hasLocation && { lastLocation: { type: 'Point', coordinates: [lng, lat] } }),
   });
@@ -155,9 +156,9 @@ export async function listLiveCabs(routeId, stopId, toStopId) {
       vehicle: s.vehicleId
         ? { plate: s.vehicleId.plate, make: s.vehicleId.make, model: s.vehicleId.model, colour: s.vehicleId.colour }
         : null,
-      tier: seatTier(s.seatsTotal),
+      tier: seatTier(s.seatsTotal, s.seatsCapacity),
       baseFare: fare,
-      fare: tierFare(fare, s.seatsTotal),
+      fare: tierFare(fare, s.seatsTotal, s.seatsCapacity),
     });
   }
   cabs.sort((a, b) => a.etaSeconds - b.etaSeconds);

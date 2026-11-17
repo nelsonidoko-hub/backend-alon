@@ -167,7 +167,7 @@ export async function createBooking(user, { sessionId, fromStopId, toStopId, sea
     throw new AppError(409, 'This cab has already passed your stop', 'CAB_PASSED');
   }
 
-  const farePerSeat = tierFare(await getFare(session.routeId, from.stopId, to.stopId), session.seatsTotal);
+  const farePerSeat = tierFare(await getFare(session.routeId, from.stopId, to.stopId), session.seatsTotal, session.seatsCapacity);
 
   const bookingId = new mongoose.Types.ObjectId();
   const heldKobo = paymentMethod === 'wallet' ? toKobo(farePerSeat * seats) : 0;

@@ -8,6 +8,7 @@ const sessionSchema = new mongoose.Schema(
     online: { type: Boolean, default: true },
     active: { type: Boolean, default: true },
     seatsTotal: { type: Number, required: true, min: 1 },
+    seatsCapacity: Number, // passenger seats the vehicle has; offering fewer than this makes it a comfort ride
     seatsFree: { type: Number, required: true, min: 0 },
     lastLocation: {
       type: { type: String, enum: ['Point'] },

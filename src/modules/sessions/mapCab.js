@@ -9,7 +9,7 @@ export function toMapCab(session, pos, routeName) {
     routeName: routeName || '',
     seatsFree: session.seatsFree,
     seatsTotal: session.seatsTotal,
-    tier: seatTier(session.seatsTotal),
+    tier: seatTier(session.seatsTotal, session.seatsCapacity),
     full: session.seatsFree === 0,
     location: { lat: round(pos.lat), lng: round(pos.lng) },
   };
