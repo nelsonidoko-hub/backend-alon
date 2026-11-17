@@ -17,7 +17,7 @@ const hashOtp = (phone, code) =>
   crypto.createHmac('sha256', env.OTP_SECRET).update(`${phone}:${code}`).digest('hex');
 const hashToken = (t) => crypto.createHash('sha256').update(t).digest('hex');
 
-async function storeCode(phone, channel = 'sms', email, signupPhone) {
+export async function storeCode(phone, channel = 'sms', email) {
   const existing = await Otp.findOne({ phone });
   if (existing && Date.now() - existing.createdAt.getTime() < RESEND_AFTER_MS) {
     throw new AppError(429, 'Please wait a minute before requesting another code', 'OTP_TOO_SOON');
@@ -30,7 +30,6 @@ async function storeCode(phone, channel = 'sms', email, signupPhone) {
       attempts: 0,
       channel,
       email: channel === 'email' ? email : undefined,
-      signupPhone: channel === 'email' ? signupPhone : undefined,
       createdAt: new Date(),
       expiresAt: new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000),
     },
@@ -41,45 +40,50 @@ async function storeCode(phone, channel = 'sms', email, signupPhone) {
 
 const maskEmail = (e) => e.replace(/^(.).*(@.*)$/, (_m, a, b) => `${a}***${b}`);
 
-const emailKey = (email) => `e:${email}`;
+export const emailKey = (email) => `e:${email}`;
 
-/**
- * Email sign-in. Type the email you already use on FoloRide and the code is sent there.
- * A brand-new passenger must also give a phone number (rides need one); that number stays unverified until an SMS code is used.
- */
-export async function requestEmailOtp({ email, phone, role }) {
-  const user = await User.findOne({ email });
-  if (user) {
-    if (user.status === 'blocked') throw new AppError(403, 'Account blocked', 'BLOCKED');
-  } else {
-    if (role === 'driver') throw new AppError(400, 'No driver account uses this email. New drivers sign up with their phone number so we can confirm it by SMS.', 'EMAIL_NOT_ALLOWED');
-    if (!phone) throw new AppError(400, 'New here? Add your phone number too, so drivers can reach you.', 'NEED_PHONE');
-    if (await User.exists({ phone })) {
-      throw new AppError(409, 'That phone number already has an account. Sign in with its SMS code instead.', 'PHONE_TAKEN');
-    }
-  }
-  const key = emailKey(email);
-  const code = await storeCode(key, 'email', email, user ? undefined : phone);
+async function mailCode(email) {
+  const code = await storeCode(emailKey(email), 'email', email);
   const sent = await sendEmail(email, 'Your FoloRide code', `Your FoloRide code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes. If you did not ask for it, ignore this email.`);
   if (!sent) {
-    await Otp.deleteOne({ phone: key });
+    await Otp.deleteOne({ phone: emailKey(email) });
     throw new AppError(502, 'Could not send the email. Try again shortly', 'EMAIL_FAILED');
   }
   return { sentTo: maskEmail(email) };
 }
 
-export async function verifyEmailOtp({ email, code, name }) {
+// Sends a code to an email for a signed-in person who wants to add or change the email on their account.
+export async function requestEmailChange(userId, email) {
+  if (await User.exists({ email, _id: { $ne: userId } })) throw new AppError(409, 'That email is already used by another account', 'EMAIL_TAKEN');
+  return mailCode(email);
+}
+
+export async function confirmEmailProof(email, code) {
   const proof = await consumeOtp(emailKey(email), code);
+  if (proof.channel !== 'email') throw new AppError(400, 'Invalid code', 'OTP_INVALID');
+}
+
+/**
+ * Email sign-in: type your email and the code is sent there. A new passenger's account is made when the code is entered.
+ * New accounts have no phone until the person adds one (and proves it by SMS) in their profile.
+ */
+export async function requestEmailOtp({ email }) {
+  const user = await User.findOne({ email });
+  if (user) {
+    if (user.status === 'blocked') throw new AppError(403, 'Account blocked', 'BLOCKED');
+  }
+  return mailCode(email);
+}
+
+export async function verifyEmailOtp({ email, code, name, role }) {
+  await consumeOtp(emailKey(email), code);
   let user = await User.findOne({ email });
   if (user) {
     if (user.status === 'blocked') throw new AppError(403, 'Account blocked', 'BLOCKED');
     if (name && !user.name) user.name = name;
     await user.save();
   } else {
-    if (!proof.signupPhone || (await User.exists({ phone: proof.signupPhone }))) {
-      throw new AppError(409, 'That phone number already has an account. Sign in with its SMS code instead.', 'PHONE_TAKEN');
-    }
-    user = await User.create({ phone: proof.signupPhone, name, email, role: 'passenger' });
+    user = await User.create({ name, email, role: role === 'driver' ? 'driver' : 'passenger' });
   }
   const tokens = await issueTokens(user);
   return { user, ...tokens };
@@ -129,7 +133,7 @@ export async function consumeOtp(phone, code) {  const otp = await Otp.findOne({
     await otp.save();
     throw new AppError(400, 'Incorrect code', 'OTP_INVALID');
   }
-  const result = { channel: otp.channel || 'sms', email: otp.email, signupPhone: otp.signupPhone };
+  const result = { channel: otp.channel || 'sms', email: otp.email };
   await otp.deleteOne();
   return result;
 }

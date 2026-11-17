@@ -1,8 +1,18 @@
 import { z } from 'zod';
+import { normalizePhone } from '../../utils/phone.js';
 
 const url = z.string().max(300).optional();
 
 export const applySchema = z.object({
+  // Needed only when the driver signed up with an email and has no phone on the account yet.
+  phone: z
+    .string()
+    .transform((v, ctx) => {
+      const p = normalizePhone(v);
+      if (!p) { ctx.addIssue({ code: 'custom', message: 'Enter a Nigerian number like 0803 123 4567' }); return z.NEVER; }
+      return p;
+    })
+    .optional(),
   driverType: z.enum(['taxi', 'staff']).default('taxi'),
   licenceNumber: z.string().trim().min(3).max(40),
   licencePhotoKey: url,

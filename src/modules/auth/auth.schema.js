@@ -12,11 +12,12 @@ const phone = z.string().transform((v, ctx) => {
 
 export const requestOtpSchema = z.object({ phone });
 const emailField = z.string().trim().toLowerCase().email().max(120);
-export const requestEmailOtpSchema = z.object({ email: emailField, phone: phone.optional(), role: z.enum(['passenger', 'driver']).optional() });
+export const requestEmailOtpSchema = z.object({ email: emailField, role: z.enum(['passenger', 'driver']).optional() });
 export const verifyEmailOtpSchema = z.object({
   email: emailField,
   code: z.string().regex(/^\d{6}$/, 'Code must be 6 digits'),
   name: z.string().trim().min(2).max(80).optional(),
+  role: z.enum(['passenger', 'driver']).optional(),
 });
 
 export const verifyOtpSchema = z.object({

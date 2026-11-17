@@ -9,7 +9,14 @@ export async function applyAsDriver(user, data) {
   if (!user.name) {
     throw new AppError(400, 'Set your name first (PATCH /me)', 'NAME_REQUIRED');
   }
-  const { vehicle, ...profile } = data;
+  const { vehicle, phone, ...profile } = data;
+  if (!user.phone) {
+    if (!phone) throw new AppError(400, 'Add your phone number so riders and our team can reach you', 'PHONE_REQUIRED');
+    const User = user.constructor;
+    if (await User.exists({ phone, _id: { $ne: user._id } })) throw new AppError(409, 'That phone number belongs to another account', 'PHONE_TAKEN');
+    user.phone = phone; // not yet proven by SMS: our team calls it before approving the driver
+    await user.save();
+  }
   const prefixes = {
     profilePhotoKey: `profiles/${user._id}/`,
     licencePhotoKey: `docs/${user._id}/`,

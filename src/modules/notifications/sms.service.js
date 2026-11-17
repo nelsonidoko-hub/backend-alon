@@ -86,12 +86,37 @@ async function sendViaTermii(phone, message) {
   }
 }
 
+// Brevo transactional SMS. Uses the same Brevo API key as email (it needs the "Transactional SMS" permission and SMS credits).
+const brevoKey = () => env.BREVO_API_KEY || (env.EMAIL_PROVIDER !== 'resend' ? env.EMAIL_API_KEY : undefined);
+async function sendViaBrevo(phone, message) {
+  try {
+    const body = JSON.stringify({
+      sender: (env.BREVO_SMS_SENDER || 'FoloRide').replace(/[^A-Za-z0-9]/g, '').slice(0, 11),
+      recipient: phone.replace('+', ''),
+      content: message,
+      type: 'transactional',
+    });
+    const headers = { 'api-key': brevoKey(), 'Content-Type': 'application/json', Accept: 'application/json' };
+    let res = await fetch('https://api.brevo.com/v3/transactionalSMS/send', { method: 'POST', headers, body, signal: AbortSignal.timeout(10000) });
+    if (res.status === 404) res = await fetch('https://api.brevo.com/v3/transactionalSMS/sms', { method: 'POST', headers, body, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) {
+      logger.error({ status: res.status, body: (await res.text().catch(() => '')).slice(0, 300) }, 'Brevo SMS failed');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err }, 'Brevo SMS request error');
+    return false;
+  }
+}
+
 const PROVIDERS = {
   infobip: { configured: () => Boolean(env.INFOBIP_API_KEY && env.INFOBIP_BASE_URL), send: sendViaInfobip },
   termii: { configured: () => Boolean(env.TERMII_API_KEY), send: sendViaTermii },
+  brevo: { configured: () => Boolean(brevoKey()), send: sendViaBrevo },
 };
 
-// SMS_PROVIDER=infobip | termii picks the main one. 'auto' (default) uses whichever has a key, Infobip first.
+// SMS_PROVIDER=infobip | termii | brevo picks the main one. 'auto' (default) uses whichever has a key, Infobip first.
 // If the main provider fails and the other one is configured, the other is tried once.
 function order() {
   const names = Object.keys(PROVIDERS);
