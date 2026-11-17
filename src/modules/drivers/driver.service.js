@@ -1,3 +1,4 @@
+import { driverUrl } from '../../config/env.js';
 import { AppError } from '../../utils/AppError.js';
 import { Driver } from './driver.model.js';
 import { Vehicle } from './vehicle.model.js';
@@ -82,10 +83,10 @@ export async function listDrivers(status) {
   );
 }
 
-async function setStatus(driverId, adminUser, patch, notice) {
+async function setStatus(driverId, adminUser, patch, notice, email) {
   const driver = await Driver.findByIdAndUpdate(driverId, { $set: patch }, { new: true });
   if (!driver) throw new AppError(404, 'Driver not found', 'NOT_FOUND');
-  notifyUser(driver.userId, 'driver:status', { status: driver.status }, { title: 'FoloRide', body: notice, sms: true });
+  notifyUser(driver.userId, 'driver:status', { status: driver.status }, { title: 'FoloRide', body: notice, sms: true, email });
   return driver;
 }
 
@@ -94,11 +95,17 @@ export const approveDriver = (id, admin) =>
     id,
     admin,
     { status: 'approved', approvedBy: admin._id, approvedAt: new Date(), rejectionReason: null },
-    'Your FoloRide driver account is approved. You can go online now.'
+    'Your FoloRide driver account is approved. You can go online now.',
+    { subject: 'Your FoloRide driver account is approved', heading: 'You are approved', lines: ['Your driver application has been approved. Open the driver app, choose your route and go online to start receiving riders.'], button: { label: 'Open the driver app', url: driverUrl } }
   );
 
 export const rejectDriver = (id, admin, reason) =>
-  setStatus(id, admin, { status: 'rejected', rejectionReason: reason }, `Your FoloRide driver application was not approved: ${reason}`);
+  setStatus(id, admin, { status: 'rejected', rejectionReason: reason }, `Your FoloRide driver application was not approved: ${reason}`, {
+    subject: 'About your FoloRide driver application',
+    heading: 'Your application was not approved',
+    lines: [`Reason: ${reason}`, 'You can fix this and apply again from the driver app.'],
+    button: { label: 'Open the driver app', url: driverUrl },
+  });
 
 export async function suspendDriver(id, admin) {
   const driver = await setStatus(id, admin, { status: 'suspended' }, 'Your FoloRide driver account has been suspended.');

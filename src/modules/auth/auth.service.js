@@ -5,6 +5,20 @@ import { AppError } from '../../utils/AppError.js';
 import { User } from '../users/user.model.js';
 import { sendSms } from '../notifications/sms.service.js';
 import { sendEmail } from '../notifications/email.service.js';
+import { emailUser, appLink } from '../notifications/email.notify.js';
+
+// Sent once when an account is first created (only if it has an email).
+export function welcomeEmail(user) {
+  const driver = user.role === 'driver';
+  emailUser(user._id, {
+    subject: 'Welcome to FoloRide',
+    heading: `Welcome to FoloRide${user.name ? `, ${user.name.split(' ')[0]}` : ''}`,
+    lines: driver
+      ? ['Your driver account is created. Finish your application (licence, vehicle and photos) so our team can approve you. We will email you as soon as it is reviewed.']
+      : ['Your account is ready. Pick your stop, choose a cab and book a seat on a shared ride across Abuja.', 'Add money to your wallet for cashless rides, or pay the driver in cash.'],
+    button: { label: driver ? 'Complete my application' : 'Book a ride', url: appLink(user.role) },
+  });
+}
 import { whatsappSendOtp } from '../whatsapp/whatsapp.notify.js'; // FEATURE: WHATSAPP
 import { Otp } from './otp.model.js';
 import { RefreshToken } from './refreshToken.model.js';
@@ -76,7 +90,7 @@ export async function requestEmailOtp({ email }) {
 }
 
 export async function verifyEmailOtp({ email, code, name, role }) {
-  await consumeOtp(emailKey(email), code);
+  await consumeOtp(emailKey(email), code, { keep: true });
   let user = await User.findOne({ email });
   if (user) {
     if (user.status === 'blocked') throw new AppError(403, 'Account blocked', 'BLOCKED');
@@ -84,7 +98,9 @@ export async function verifyEmailOtp({ email, code, name, role }) {
     await user.save();
   } else {
     user = await User.create({ name, email, role: role === 'driver' ? 'driver' : 'passenger' });
+    welcomeEmail(user);
   }
+  await Otp.deleteOne({ phone: emailKey(email) });
   const tokens = await issueTokens(user);
   return { user, ...tokens };
 }
@@ -116,7 +132,8 @@ async function issueTokens(user) {
 }
 
 /** Checks a login code and uses it up. Throws if it is wrong, expired or locked. */
-export async function consumeOtp(phone, code) {  const otp = await Otp.findOne({ phone });
+export async function consumeOtp(phone, code, { keep = false } = {}) {
+  const otp = await Otp.findOne({ phone });
   if (!otp || otp.expiresAt < new Date()) {
     throw new AppError(400, 'Code expired or not found', 'OTP_INVALID');
   }
@@ -134,12 +151,12 @@ export async function consumeOtp(phone, code) {  const otp = await Otp.findOne({
     throw new AppError(400, 'Incorrect code', 'OTP_INVALID');
   }
   const result = { channel: otp.channel || 'sms', email: otp.email };
-  await otp.deleteOne();
+  if (!keep) await otp.deleteOne(); // keep: the caller deletes it once the account step has worked, so a server error does not waste the code
   return result;
 }
 
 export async function verifyOtp({ phone, code, name, role }) {
-  const { channel, email } = await consumeOtp(phone, code);
+  const { channel, email } = await consumeOtp(phone, code, { keep: true });
 
   let user = await User.findOne({ phone });
   if (user) {
@@ -164,6 +181,7 @@ export async function verifyOtp({ phone, code, name, role }) {
     });
   }
 
+  await Otp.deleteOne({ phone });
   const tokens = await issueTokens(user);
   return { user, ...tokens };
 }
@@ -231,6 +249,7 @@ export async function socialLinkPhone({ signupToken, phone, code }) {
       [field]: claim.id,
       phoneVerifiedAt: new Date(),
     });
+    welcomeEmail(user);
   }
   return { user, ...(await issueTokens(user)) };
 }

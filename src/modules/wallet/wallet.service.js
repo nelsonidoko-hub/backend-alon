@@ -140,7 +140,7 @@ export async function creditTopup(reference, data) {
     return { ok: true };
   });
   if (result.ok) {
-    notifyUser(topup.userId, 'wallet:updated', { reason: 'topup' }, { title: 'Wallet topped up', body: `${naira(topup.amountKobo)} was added to your FoloRide wallet.` });
+    notifyUser(topup.userId, 'wallet:updated', { reason: 'topup' }, { title: 'Wallet topped up', body: `${naira(topup.amountKobo)} was added to your FoloRide wallet.`, email: true });
   }
   return result;
 }
@@ -342,7 +342,7 @@ async function payout(wdId, admin) {
 
 async function markPaid(wdId) {
   const wd = await Withdrawal.findOneAndUpdate({ _id: wdId, status: 'processing' }, { $set: { status: 'paid', paidAt: new Date() } }, { new: true });
-  if (wd) notifyUser(wd.userId, 'wallet:updated', { reason: 'withdrawal_paid' }, { title: 'Withdrawal sent', body: `${naira(wd.amountKobo)} is on its way to your bank.`, sms: true });
+  if (wd) notifyUser(wd.userId, 'wallet:updated', { reason: 'withdrawal_paid' }, { title: 'Withdrawal sent', body: `${naira(wd.amountKobo)} is on its way to your bank.`, sms: true, email: true });
 }
 
 async function failWithdrawal(wdId, reason, status) {
@@ -356,7 +356,7 @@ async function failWithdrawal(wdId, reason, status) {
     await post(session, { userId: wd.userId }, { type: 'withdrawal_reversal', amount: wd.amountKobo + wd.feeKobo, ref: `wd-rev:${wdId}`, meta: { withdrawalId: String(wdId), reason }, allowFrozen: true });
     return { wd };
   });
-  if (result.wd) notifyUser(result.wd.userId, 'wallet:updated', { reason: 'withdrawal_failed' }, { title: 'Withdrawal not completed', body: `${naira(result.wd.amountKobo)} was returned to your wallet. ${reason}`, sms: true });
+  if (result.wd) notifyUser(result.wd.userId, 'wallet:updated', { reason: 'withdrawal_failed' }, { title: 'Withdrawal not completed', body: `${naira(result.wd.amountKobo)} was returned to your wallet. ${reason}`, sms: true, email: true });
 }
 
 export const adminApproveWithdrawal = (id, admin) => payout(id, admin);
@@ -417,7 +417,7 @@ export async function adminAdjust(admin, userId, amountKobo, reason) {
   await withTx((session) =>
     post(session, { userId }, { type: 'adjustment', amount: amountKobo, ref: `adj:${new mongoose.Types.ObjectId()}`, meta: { reason, by: String(admin._id) }, allowFrozen: true })
   );
-  notifyUser(userId, 'wallet:updated', { reason: 'adjustment' }, { title: 'Wallet updated', body: `${naira(Math.abs(amountKobo))} was ${amountKobo > 0 ? 'added to' : 'taken from'} your wallet by FoloRide support.` });
+  notifyUser(userId, 'wallet:updated', { reason: 'adjustment' }, { title: 'Wallet updated', body: `${naira(Math.abs(amountKobo))} was ${amountKobo > 0 ? 'added to' : 'taken from'} your wallet by FoloRide support.`, email: true });
 }
 
 export async function adminFreeze(userId, frozen) {

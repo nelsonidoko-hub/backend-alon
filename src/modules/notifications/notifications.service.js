@@ -1,3 +1,5 @@
+import { sendEmail } from './email.service.js';
+import { emailUser } from './email.notify.js';
 import webpush from 'web-push';
 import { env } from '../../config/env.js';
 import { logger } from '../../utils/logger.js';
@@ -26,16 +28,18 @@ export const presentNotification = (n) => ({
  * Sends a live event to the user's open app. When a title is given it is also saved to the
  * user's inbox, sent as a push if the app is closed, and (if sms is true) as an SMS when push is not possible.
  */
-export async function notifyUser(userId, event, payload = {}, { title, body, sms = false, whatsapp = false, type, url } = {}) {
+export async function notifyUser(userId, event, payload = {}, { title, body, sms = false, whatsapp = false, type, url, email } = {}) {
   try {
     emitToUser(userId, event, payload);
+    // email: true sends the title and body as an email; an object gives a richer one (see email.notify.js). Sent whether or not the app is open.
+    if (email) emailUser(userId, email === true ? { subject: title, heading: title, lines: [body] } : email);
     if (title) {
       const item = await Notification.create({ userId, type: type || event, title, body, url, data: payload });
       emitToUser(userId, 'notification:new', presentNotification(item));
     }
     if (await isUserOnline(userId)) return;
 
-    const user = await User.findById(userId).select('phone notificationPrefs +pushSubscriptions');
+    const user = await User.findById(userId).select('phone email notificationPrefs +pushSubscriptions');
     if (!user) return;
 
     let pushed = false;
@@ -56,11 +60,14 @@ export async function notifyUser(userId, event, payload = {}, { title, body, sms
     }
     // >>> FEATURE: WHATSAPP (start). Riders who chat with FoloRide, or turn it on in Profile, get important updates here. Off with WHATSAPP_ENABLED=false
     if (!pushed && (sms || whatsapp) && body && user.notificationPrefs?.whatsapp === true) {
-      if (await whatsappNotify(user.phone, title ? `${title}\n${body}` : body)) return;
+      if (user.phone && await whatsappNotify(user.phone, title ? `${title}\n${body}` : body)) return;
     }
     // <<< FEATURE: WHATSAPP (end)
     const smsAllowed = user.notificationPrefs?.sms !== false;
-    if (!pushed && sms && smsAllowed && body) await sendSms(user.phone, body);
+    if (!pushed && sms && smsAllowed && body) {
+      if (user.phone) await sendSms(user.phone, body);
+      else if (user.email && !email) await sendEmail(user.email, title || 'FoloRide', body); // email-only accounts
+    }
   } catch (err) {
     logger.error({ err }, 'notifyUser failed');
   }

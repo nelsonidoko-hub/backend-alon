@@ -1,3 +1,4 @@
+import { emailUser, appLink } from '../notifications/email.notify.js';
 import { tierFare } from '../sessions/pricing.js';
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
@@ -230,7 +231,25 @@ export async function createBooking(user, { sessionId, fromStopId, toStopId, sea
     { bookingId: String(booking._id), seats, from: from.name, passenger: firstName(user.name) },
     { title: 'New booking', body: `${seats} seat(s) booked from ${from.name}.` }
   );
-  return presentBooking(booking, { withLive: true });
+  const view = await presentBooking(booking, { withLive: true });
+  emailUser(user._id, {
+    subject: `Seat booked: ${view.from.name} to ${view.to.name}`,
+    heading: 'Your seat is booked',
+    lines: [
+      `${view.seats} seat${view.seats === 1 ? '' : 's'} reserved on ${view.route.name}. Show the code below to your driver when you board.`,
+      view.paymentMethod === 'wallet' ? `₦${view.heldNaira} is held safely in your wallet and only goes to the driver when you board.` : 'Pay the driver in cash when you board.',
+    ],
+    rows: [
+      ['Trip code', view.code],
+      ['Pick-up', view.from.name],
+      ['Drop-off', view.to.name],
+      ['Fare', `₦${view.fare}`],
+      ['Driver', view.driver.name],
+      ...(view.vehicle ? [['Cab', `${view.vehicle.colour} ${view.vehicle.make} ${view.vehicle.model} · ${view.vehicle.plate}`]] : []),
+    ],
+    button: { label: 'Open my trip', url: `${appLink('passenger')}/trip` },
+  });
+  return view;
 }
 
 export async function getActiveBooking(user) {
@@ -265,6 +284,14 @@ export async function cancelByPassenger(user, bookingId, reason) {
     { bookingId: String(updated._id), status: 'cancelled' },
     { title: 'Booking cancelled', body: late ? 'A passenger cancelled as you arrived.' : 'A passenger cancelled their booking.' }
   );
+  emailUser(updated.passengerId, {
+    subject: 'Your FoloRide booking was cancelled',
+    heading: 'Booking cancelled',
+    lines: [
+      'Your seat was released.',
+      feeKobo ? `A cancellation fee of ₦${Math.round(feeKobo / 100)} was taken from your held fare because the cab was already arriving. The rest was returned to your wallet.` : updated.heldKobo ? 'The money held for this ride went back to your wallet.' : 'You have not been charged.',
+    ],
+  });
   return presentBooking(updated, { includeCode: false });
 }
 
@@ -316,6 +343,21 @@ export async function complete(driver, bookingId, paymentConfirmed) {
   await releaseSeats(updated.sessionId, updated.seats);
   await settleBookingDoc('ride', updated);
   await Driver.updateOne({ _id: driver._id }, { $inc: { totalTrips: 1 } });
+  presentBooking(updated, { includeCode: false }).then((v) => emailUser(updated.passengerId, {
+    subject: `Trip receipt: ${v.from.name} to ${v.to.name}`,
+    heading: 'Thanks for riding with FoloRide',
+    lines: ['Here is your receipt. You can rate your driver in the app.'],
+    rows: [
+      ['Route', v.route.name],
+      ['From', v.from.name],
+      ['To', v.to.name],
+      ['Seats', String(v.seats)],
+      ['Paid', `₦${v.fare} (${v.paymentMethod === 'wallet' ? 'wallet' : 'cash'})`],
+      ['Driver', v.driver.name],
+      ...(v.vehicle ? [['Cab', v.vehicle.plate]] : []),
+    ],
+    button: { label: 'Rate my driver', url: `${appLink('passenger')}/activity` },
+  })).catch(() => {});
   notifyUser(
     updated.passengerId,
     'booking:status',
@@ -338,7 +380,7 @@ export async function noShow(driver, bookingId) {
     updated.passengerId,
     'booking:status',
     { bookingId: String(updated._id), status: 'no_show' },
-    { title: 'Missed your cab', body: 'The driver marked you as a no-show.', sms: true }
+    { title: 'Missed your cab', body: 'The driver marked you as a no-show.', sms: true, email: true }
   );
   return { id: String(updated._id), status: updated.status };
 }
@@ -353,7 +395,7 @@ export async function adminCancel(admin, bookingId, reason) {
   await releaseSeats(updated.sessionId, updated.seats);
   await settleBookingDoc('ride', updated);
   const payload = { bookingId: String(updated._id), status: 'cancelled' };
-  const opts = { title: 'Booking cancelled', body: 'Your booking was cancelled by FoloRide support.', sms: true };
+  const opts = { title: 'Booking cancelled', body: 'Your booking was cancelled by FoloRide support.', sms: true, email: true };
   notifyUser(updated.passengerId, 'booking:status', payload, opts);
   notifyUser(updated.driverUserId, 'booking:status', payload, { title: opts.title, body: opts.body });
   return { id: String(updated._id), status: updated.status };
@@ -380,7 +422,7 @@ export async function expireStaleBookings() {
       updated.passengerId,
       'booking:status',
       { bookingId: String(updated._id), status: 'expired' },
-      { title: 'Booking expired', body: 'Your FoloRide booking expired because the pick-up did not happen.' }
+      { title: 'Booking expired', body: 'Your FoloRide booking expired because the pick-up did not happen.', email: true }
     );
   }
   return count;
