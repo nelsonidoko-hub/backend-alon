@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema(
   {
-    phone: { type: String, required: true, unique: true, index: true },
+    phone: { type: String }, // optional: people can sign up with just an email. Unique when present (see index below)
     name: { type: String, trim: true, maxlength: 80 },
     email: { type: String, trim: true, lowercase: true, maxlength: 120 },
     googleId: { type: String, index: { unique: true, sparse: true } },
@@ -22,7 +22,13 @@ const userSchema = new mongoose.Schema(
       staffId: { type: String, trim: true, maxlength: 40 },
       verified: { type: Boolean, default: false },
     },
-    notificationPrefs: { sms: { type: Boolean, default: true }, whatsapp: { type: Boolean, default: false } },
+    notificationPrefs: {
+      sms: { type: Boolean, default: true },
+      whatsapp: { type: Boolean, default: false },
+      email: { type: Boolean, default: true },
+      push: { type: Boolean, default: true },
+      categories: { type: Object, default: undefined },
+    },
     pushSubscriptions: {
       type: [{ _id: false, endpoint: String, keys: { p256dh: String, auth: String } }],
       default: [],
@@ -39,5 +45,7 @@ userSchema.set('toJSON', {
     return ret;
   },
 });
+
+userSchema.index({ phone: 1 }, { unique: true, name: 'phone_unique_when_set', partialFilterExpression: { phone: { $type: 'string' } } });
 
 export const User = mongoose.model('User', userSchema);

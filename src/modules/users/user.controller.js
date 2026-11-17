@@ -15,7 +15,8 @@ export const updateMe = asyncHandler(async (req, res) => {
   if (emergencyContact) req.user.emergencyContact = emergencyContact;
   if (notificationPrefs) {
     const current = req.user.notificationPrefs?.toObject?.() ?? req.user.notificationPrefs ?? {};
-    req.user.notificationPrefs = { ...current, ...notificationPrefs };
+    const { categories, ...rest } = notificationPrefs;
+    req.user.notificationPrefs = { ...current, ...rest, ...(categories && { categories: { ...(current.categories || {}), ...categories } }) };
   }
   await req.user.save();
   res.json({ user: req.user });
