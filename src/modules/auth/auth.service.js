@@ -35,7 +35,7 @@ export async function requestOtp(phone) {
   // >>> FEATURE: WHATSAPP (start). With OTP_CHANNEL=whatsapp the code goes to WhatsApp first, then SMS if that fails.
   let sent = env.OTP_CHANNEL === 'whatsapp' ? await whatsappSendOtp(phone, code) : false;
   // <<< FEATURE: WHATSAPP (end)
-  if (!sent) sent = await sendSms(phone, `Your Along code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes.`);
+  if (!sent) sent = await sendSms(phone, `Your FoloRide code is ${code}. It expires in ${env.OTP_TTL_MINUTES} minutes.`);
   if (!sent) {
     await Otp.deleteOne({ phone });
     throw new AppError(502, 'Could not send the SMS. Try again shortly', 'SMS_FAILED');

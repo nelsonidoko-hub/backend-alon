@@ -13,7 +13,7 @@ registerSocketHandlers(io);
 
 async function start() {
   await connectDb();
-  server.listen(env.PORT, () => logger.info(`Along API running on port ${env.PORT}`));
+  server.listen(env.PORT, () => logger.info(`FoloRide API running on port ${env.PORT}`));
   if (env.JOBS_ENABLED === 'true') startJobs();
 }
 

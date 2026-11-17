@@ -29,7 +29,7 @@ const schema = z.object({
   INFOBIP_BASE_URL: z.string().optional(), // your own address from the Infobip portal, e.g. xxxxx.api.infobip.com
   INFOBIP_SENDER_ID: z.string().default('InfoSMS'),
   TERMII_API_KEY: z.string().optional(),
-  TERMII_SENDER_ID: z.string().default('Along'),
+  TERMII_SENDER_ID: z.string().default('FoloRide'),
   TERMII_CHANNEL: z.enum(['generic', 'dnd', 'whatsapp']).default('generic'),
   TERMII_BASE_URL: z.string().default('https://api.ng.termii.com'),
   S3_ENDPOINT: z.string().optional(),

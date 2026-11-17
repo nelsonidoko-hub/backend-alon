@@ -77,12 +77,12 @@ function order() {
 
 /** Returns true if the message was sent (or logged in development), false if it failed. */
 export async function sendSms(phone, message) {
+  const testMode = env.NODE_ENV === 'production' && env.LOG_OTP_WITHOUT_SMS === 'true';
+  // Testing only: always show the message in the server log, whether or not the SMS then goes through.
+  if (testMode) logger.warn({ phone, message }, 'TEST MODE: message (also sent by SMS if a provider is set up)');
   const chain = order();
   if (!chain.length) {
-    if (env.NODE_ENV === 'production' && env.LOG_OTP_WITHOUT_SMS === 'true') {
-      logger.warn({ phone, message }, 'TEST MODE: SMS not sent, code shown here');
-      return true;
-    }
+    if (testMode) return true;
     if (env.NODE_ENV === 'production') {
       logger.error({ phone }, 'No SMS provider configured (set INFOBIP_API_KEY or TERMII_API_KEY), SMS not sent');
       return false;
@@ -94,5 +94,6 @@ export async function sendSms(phone, message) {
     if (await PROVIDERS[name].send(phone, message)) return true;
     logger.warn({ provider: name }, chain.length > 1 ? 'SMS provider failed, trying the next one' : 'SMS provider failed');
   }
-  return false;
+  // In test mode a failed SMS still counts as success, because the code is in the log. Remove LOG_OTP_WITHOUT_SMS before real users.
+  return testMode;
 }

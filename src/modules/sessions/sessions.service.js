@@ -31,7 +31,7 @@ async function closeSession(session, reason) {
         b.passengerId,
         'booking:status',
         { bookingId: String(b._id), status: 'cancelled', reason },
-        { title: 'Booking cancelled', body: `Your Along booking was cancelled: ${reason}.`, sms: true }
+        { title: 'Booking cancelled', body: `Your FoloRide booking was cancelled: ${reason}.`, sms: true }
       );
     }
   }

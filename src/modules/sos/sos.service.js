@@ -40,7 +40,7 @@ export async function createSos(user, { bookingId, commuteBookingId, lat, lng, n
   const contact = user.emergencyContact;
   if (contact?.phone) {
     const where = hasLocation ? ` Location: https://maps.google.com/?q=${lat},${lng}.` : '';
-    await sendSms(contact.phone, `SOS from ${user.name || user.phone} on Along.${where}${tripLink}`);
+    await sendSms(contact.phone, `SOS from ${user.name || user.phone} on FoloRide.${where}${tripLink}`);
     contactNotified = true;
   }
 

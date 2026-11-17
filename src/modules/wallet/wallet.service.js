@@ -140,7 +140,7 @@ export async function creditTopup(reference, data) {
     return { ok: true };
   });
   if (result.ok) {
-    notifyUser(topup.userId, 'wallet:updated', { reason: 'topup' }, { title: 'Wallet topped up', body: `${naira(topup.amountKobo)} was added to your Along wallet.` });
+    notifyUser(topup.userId, 'wallet:updated', { reason: 'topup' }, { title: 'Wallet topped up', body: `${naira(topup.amountKobo)} was added to your FoloRide wallet.` });
   }
   return result;
 }
@@ -326,7 +326,7 @@ async function payout(wdId, admin) {
   try {
     const d = await paystack('/transfer', {
       method: 'POST',
-      body: { source: 'balance', amount: wd.amountKobo, recipient: bank.recipientCode, reason: 'Along earnings', reference: `wd_${wd._id}` },
+      body: { source: 'balance', amount: wd.amountKobo, recipient: bank.recipientCode, reason: 'FoloRide earnings', reference: `wd_${wd._id}` },
     });
     await Withdrawal.updateOne({ _id: wd._id }, { $set: { transferCode: d.data.transfer_code, providerStatus: d.data.status } });
     if (d.data.status === 'success') await markPaid(wd._id);
@@ -415,7 +415,7 @@ export async function adminAdjust(admin, userId, amountKobo, reason) {
   await withTx((session) =>
     post(session, { userId }, { type: 'adjustment', amount: amountKobo, ref: `adj:${new mongoose.Types.ObjectId()}`, meta: { reason, by: String(admin._id) }, allowFrozen: true })
   );
-  notifyUser(userId, 'wallet:updated', { reason: 'adjustment' }, { title: 'Wallet updated', body: `${naira(Math.abs(amountKobo))} was ${amountKobo > 0 ? 'added to' : 'taken from'} your wallet by Along support.` });
+  notifyUser(userId, 'wallet:updated', { reason: 'adjustment' }, { title: 'Wallet updated', body: `${naira(Math.abs(amountKobo))} was ${amountKobo > 0 ? 'added to' : 'taken from'} your wallet by FoloRide support.` });
 }
 
 export async function adminFreeze(userId, frozen) {

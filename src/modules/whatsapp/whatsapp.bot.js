@@ -44,7 +44,7 @@ const menu = (phone, user, intro) =>
 
 export async function handleInbound(msg, profileName) {
   const phone = normalizePhone(msg.from);
-  if (!phone) return wa.sendText(msg.from, 'Sorry, Along works with Nigerian phone numbers for now.');
+  if (!phone) return wa.sendText(msg.from, 'Sorry, FoloRide works with Nigerian phone numbers for now.');
   if (tooBusy(phone)) return null;
 
   const contact = await WaContact.findOneAndUpdate(
@@ -54,13 +54,13 @@ export async function handleInbound(msg, profileName) {
   );
   const user = await User.findOne({ phone });
   if (!user) return onboard(phone, contact, msg, profileName);
-  if (user.status === 'blocked') return wa.sendText(phone, 'Your Along account is blocked. Please contact support.');
+  if (user.status === 'blocked') return wa.sendText(phone, 'Your FoloRide account is blocked. Please contact support.');
   if (user.role === 'driver') {
-    return wa.sendText(phone, `Drivers use the Along app, so riders can see your live location. Open it here: ${driverUrl}`);
+    return wa.sendText(phone, `Drivers use the FoloRide app, so riders can see your live location. Open it here: ${driverUrl}`);
   }
-  if (user.role !== 'passenger') return wa.sendText(phone, 'This number belongs to an Along admin account. Please use the admin app.');
+  if (user.role !== 'passenger') return wa.sendText(phone, 'This number belongs to an FoloRide admin account. Please use the admin app.');
 
-  // Chatting with Along counts as agreeing to get updates here, unless they asked to stop.
+  // Chatting with FoloRide counts as agreeing to get updates here, unless they asked to stop.
   if (!contact.optedOut && user.notificationPrefs?.whatsapp !== true) {
     await User.updateOne({ _id: user._id }, { $set: { 'notificationPrefs.whatsapp': true } });
   }
@@ -88,7 +88,7 @@ async function onboard(phone, contact, msg, profileName) {
       notificationPrefs: { sms: true, whatsapp: true },
     });
     await WaContact.updateOne({ _id: contact._id }, { $set: { pendingName: false, userId: user._id } });
-    await wa.sendText(phone, `Welcome to Along, ${first(name)}! Your rider account is ready.`);
+    await wa.sendText(phone, `Welcome to FoloRide, ${first(name)}! Your rider account is ready.`);
     return menu(phone, user, 'What would you like to do?');
   }
   await WaContact.updateOne({ _id: contact._id }, { $set: { pendingName: true } });
@@ -96,7 +96,7 @@ async function onboard(phone, contact, msg, profileName) {
   const hello = profileName ? `Hi ${first(profileName)}! ` : '';
   return wa.sendText(
     phone,
-    `${hello}Welcome to Along. See shared cabs on your route, book a seat and travel with a fixed fare.\n\nTo create your rider account, reply with your name.${terms}`
+    `${hello}Welcome to FoloRide. See shared cabs on your route, book a seat and travel with a fixed fare.\n\nTo create your rider account, reply with your name.${terms}`
   );
 }
 
@@ -250,7 +250,7 @@ async function share(user, phone, bookingId) {
 
 async function alertMe(user, phone, routeId, fromId) {
   await createAlert(user, { routeId, fromStopId: fromId, days: [0, 1, 2, 3, 4, 5, 6], startTime: '06:00', endTime: '22:00' });
-  return wa.sendText(phone, 'Done. I will message you when a cab with free seats is close to your stop, between 6am and 10pm. You can change this in the Along app under Inbox, Route alerts.');
+  return wa.sendText(phone, 'Done. I will message you when a cab with free seats is close to your stop, between 6am and 10pm. You can change this in the FoloRide app under Inbox, Route alerts.');
 }
 
 async function showWallet(user, phone) {
@@ -273,7 +273,7 @@ async function topup(user, phone, amount) {
 async function sos(user, phone) {
   const active = await getActiveBooking(user);
   await createSos(user, { bookingId: active?.id, note: 'Sent from WhatsApp' });
-  await wa.sendText(phone, 'SOS sent to the Along team and your emergency contact (if you added one in the app). If you are in danger, call the emergency services now (112 in Nigeria).');
+  await wa.sendText(phone, 'SOS sent to the FoloRide team and your emergency contact (if you added one in the app). If you are in danger, call the emergency services now (112 in Nigeria).');
   return wa.sendLocationRequest(phone, 'Share your location so we can find you.');
 }
 
@@ -289,7 +289,7 @@ async function onLocation(user, phone, loc) {
     bookingId: alert.bookingId ? String(alert.bookingId) : null, location: alert.location, note: alert.note, at: alert.createdAt,
   });
   if (user.emergencyContact?.phone) {
-    await sendSms(user.emergencyContact.phone, `SOS from ${user.name || user.phone} on Along. Location: https://maps.google.com/?q=${loc.latitude},${loc.longitude}`);
+    await sendSms(user.emergencyContact.phone, `SOS from ${user.name || user.phone} on FoloRide. Location: https://maps.google.com/?q=${loc.latitude},${loc.longitude}`);
   }
   return wa.sendText(phone, 'Location received. Our team has it.');
 }
@@ -301,7 +301,7 @@ export async function handleInboundSafely(msg, profileName) {
   } catch (err) {
     logger.error({ err }, 'WhatsApp handler failed');
     const phone = `+${msg.from}`;
-    const text = err?.statusCode && err.statusCode < 500 ? cut(err.message, 300) : 'Something went wrong. Please try again, or use the Along app.';
+    const text = err?.statusCode && err.statusCode < 500 ? cut(err.message, 300) : 'Something went wrong. Please try again, or use the FoloRide app.';
     await wa.sendText(phone, text).catch(() => {});
   }
 }

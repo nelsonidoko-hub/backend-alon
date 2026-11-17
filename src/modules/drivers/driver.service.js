@@ -78,7 +78,7 @@ export async function listDrivers(status) {
 async function setStatus(driverId, adminUser, patch, notice) {
   const driver = await Driver.findByIdAndUpdate(driverId, { $set: patch }, { new: true });
   if (!driver) throw new AppError(404, 'Driver not found', 'NOT_FOUND');
-  notifyUser(driver.userId, 'driver:status', { status: driver.status }, { title: 'Along', body: notice, sms: true });
+  notifyUser(driver.userId, 'driver:status', { status: driver.status }, { title: 'FoloRide', body: notice, sms: true });
   return driver;
 }
 
@@ -87,14 +87,14 @@ export const approveDriver = (id, admin) =>
     id,
     admin,
     { status: 'approved', approvedBy: admin._id, approvedAt: new Date(), rejectionReason: null },
-    'Your Along driver account is approved. You can go online now.'
+    'Your FoloRide driver account is approved. You can go online now.'
   );
 
 export const rejectDriver = (id, admin, reason) =>
-  setStatus(id, admin, { status: 'rejected', rejectionReason: reason }, `Your Along driver application was not approved: ${reason}`);
+  setStatus(id, admin, { status: 'rejected', rejectionReason: reason }, `Your FoloRide driver application was not approved: ${reason}`);
 
 export async function suspendDriver(id, admin) {
-  const driver = await setStatus(id, admin, { status: 'suspended' }, 'Your Along driver account has been suspended.');
+  const driver = await setStatus(id, admin, { status: 'suspended' }, 'Your FoloRide driver account has been suspended.');
   await endActiveSession(driver._id, 'Driver account suspended');
   return driver;
 }

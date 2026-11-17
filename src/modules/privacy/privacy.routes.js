@@ -10,7 +10,7 @@ router.use(authenticate);
 
 router.get('/export', asyncHandler(async (req, res) => {
   const data = await s.exportData(req.user);
-  res.setHeader('Content-Disposition', 'attachment; filename="along-my-data.json"');
+  res.setHeader('Content-Disposition', 'attachment; filename="foloride-my-data.json"');
   res.json(data);
 }));
 

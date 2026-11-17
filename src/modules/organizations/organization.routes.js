@@ -108,7 +108,7 @@ adminOrganizationRouter.post(
     user.organization.verified = req.body.verified;
     await user.save();
     notifyUser(user._id, 'org:status', { verified: req.body.verified }, {
-      title: 'Along',
+      title: 'FoloRide',
       body: req.body.verified
         ? `Your ${user.organization.name} membership is verified. You can use staff carpooling.`
         : `Your ${user.organization.name} membership was not verified.`,

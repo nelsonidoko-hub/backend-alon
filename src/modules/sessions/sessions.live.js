@@ -70,7 +70,7 @@ async function processArrivals(session) {
         { bookingId: String(b._id), status: 'arriving' },
         {
           title: 'Your cab is almost there',
-          body: 'Your Along cab is about 2 minutes away. Get ready at your stop.',
+          body: 'Your FoloRide cab is about 2 minutes away. Get ready at your stop.',
           sms: true,
         }
       );

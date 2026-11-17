@@ -19,7 +19,7 @@ import { AppError } from '../../utils/AppError.js';
 const naira = (kobo) => `₦${(kobo / 100).toLocaleString('en-NG')}`;
 const CAP = 1000;
 
-/** Everything Along holds about this person, as a JSON object they can download. */
+/** Everything FoloRide holds about this person, as a JSON object they can download. */
 export async function exportData(user) {
   const id = user._id;
   const driver = await Driver.findOne({ userId: id }).populate('vehicleId').lean();

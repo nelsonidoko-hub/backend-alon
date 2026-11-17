@@ -305,14 +305,14 @@ export async function noShow(driver, bookingId) {
 export async function adminCancel(admin, bookingId, reason) {
   const updated = await transition(bookingId, ACTIVE_BOOKING_STATUSES, 'cancelled', {
     cancelledBy: 'admin',
-    cancelReason: reason || 'Cancelled by Along support',
+    cancelReason: reason || 'Cancelled by FoloRide support',
     cancelledAt: new Date(),
   });
   if (!updated) throw new AppError(409, 'Booking is not active', 'INVALID_STATE');
   await releaseSeats(updated.sessionId, updated.seats);
   await settleBookingDoc('ride', updated);
   const payload = { bookingId: String(updated._id), status: 'cancelled' };
-  const opts = { title: 'Booking cancelled', body: 'Your booking was cancelled by Along support.', sms: true };
+  const opts = { title: 'Booking cancelled', body: 'Your booking was cancelled by FoloRide support.', sms: true };
   notifyUser(updated.passengerId, 'booking:status', payload, opts);
   notifyUser(updated.driverUserId, 'booking:status', payload, { title: opts.title, body: opts.body });
   return { id: String(updated._id), status: updated.status };
@@ -339,7 +339,7 @@ export async function expireStaleBookings() {
       updated.passengerId,
       'booking:status',
       { bookingId: String(updated._id), status: 'expired' },
-      { title: 'Booking expired', body: 'Your Along booking expired because the pick-up did not happen.' }
+      { title: 'Booking expired', body: 'Your FoloRide booking expired because the pick-up did not happen.' }
     );
   }
   return count;

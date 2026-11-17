@@ -54,7 +54,7 @@ export async function notifyUser(userId, event, payload = {}, { title, body, sms
         }
       }
     }
-    // >>> FEATURE: WHATSAPP (start). Riders who chat with Along, or turn it on in Profile, get important updates here. Off with WHATSAPP_ENABLED=false
+    // >>> FEATURE: WHATSAPP (start). Riders who chat with FoloRide, or turn it on in Profile, get important updates here. Off with WHATSAPP_ENABLED=false
     if (!pushed && (sms || whatsapp) && body && user.notificationPrefs?.whatsapp === true) {
       if (await whatsappNotify(user.phone, title ? `${title}\n${body}` : body)) return;
     }

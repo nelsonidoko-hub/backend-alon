@@ -78,7 +78,7 @@ export async function commuteReceipt(user, id) {
   };
 }
 
-/** A driver's earnings between two dates: every completed trip, with Along's fee and what they kept. */
+/** A driver's earnings between two dates: every completed trip, with FoloRide's fee and what they kept. */
 export async function driverStatement(user, from, to) {
   const range = { $gte: from, $lte: to };
   const [rides, commute] = await Promise.all([

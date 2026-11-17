@@ -1,6 +1,6 @@
 // ======================================================================================
 // FEATURE: WHATSAPP
-// Lets riders book and manage rides by chatting with Along on WhatsApp, and lets Along send
+// Lets riders book and manage rides by chatting with FoloRide on WhatsApp, and lets FoloRide send
 // updates (and optionally login codes) over WhatsApp.
 //
 // TO SWITCH THIS OFF: set WHATSAPP_ENABLED=false in .env and restart. The webhook stops
