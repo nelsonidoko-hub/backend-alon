@@ -1,6 +1,8 @@
 import { asyncHandler } from '../../utils/asyncHandler.js';
 import { env } from '../../config/env.js';
 import { User } from './user.model.js';
+import { AppError } from '../../utils/AppError.js';
+import { requestOtp, consumeOtp } from '../auth/auth.service.js';
 
 export const getMe = asyncHandler(async (req, res) => {
   res.json({ user: req.user });
@@ -32,4 +34,25 @@ export const savePushSubscription = asyncHandler(async (req, res) => {
 export const removePushSubscription = asyncHandler(async (req, res) => {
   await User.updateOne({ _id: req.user._id }, { $pull: { pushSubscriptions: { endpoint: req.body.endpoint } } });
   res.json({ message: 'Unsubscribed' });
+});
+
+// Change the phone number on the account: a code goes to the NEW number, and the number only changes once the code is entered.
+export const requestPhoneChange = asyncHandler(async (req, res) => {
+  const { phone } = req.body;
+  if (phone === req.user.phone) throw new AppError(400, 'That is already your number', 'PHONE_SAME');
+  if (await User.exists({ phone })) throw new AppError(409, 'That number is already used by another account', 'PHONE_TAKEN');
+  await requestOtp(phone);
+  res.json({ ok: true });
+});
+
+export const confirmPhoneChange = asyncHandler(async (req, res) => {
+  const { phone, code } = req.body;
+  if (await User.exists({ phone, _id: { $ne: req.user._id } })) {
+    throw new AppError(409, 'That number is already used by another account', 'PHONE_TAKEN');
+  }
+  await consumeOtp(phone, code);
+  req.user.phone = phone;
+  req.user.phoneVerifiedAt = new Date();
+  await req.user.save();
+  res.json({ user: req.user });
 });
