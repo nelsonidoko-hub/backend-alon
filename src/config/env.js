@@ -31,6 +31,7 @@ const schema = z.object({
   TERMII_API_KEY: z.string().optional(),
   TERMII_SENDER_ID: z.string().default('FoloRide'),
   TERMII_CHANNEL: z.enum(['generic', 'dnd', 'whatsapp']).default('generic'),
+  TERMII_NUMBER_API: z.string().optional(), // 'true' = send through Termii's Number API (no Sender ID needed)
   TERMII_BASE_URL: z.string().default('https://api.ng.termii.com'),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('auto'),

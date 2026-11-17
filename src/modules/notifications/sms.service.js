@@ -35,7 +35,29 @@ async function sendViaInfobip(phone, message) {
   }
 }
 
+// Termii "Number API": sends from an auto-generated number, so no approved Sender ID is needed.
+async function sendViaTermiiNumber(phone, message) {
+  try {
+    const res = await fetch(`${env.TERMII_BASE_URL}/api/sms/number/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: phone.replace('+', ''), sms: message, api_key: env.TERMII_API_KEY }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) {
+      logger.error({ status: res.status, body: await res.text().catch(() => '') }, 'Termii Number API SMS failed');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    logger.error({ err }, 'Termii Number API request error');
+    return false;
+  }
+}
+
 async function sendViaTermii(phone, message) {
+  // TERMII_NUMBER_API=true: always use the Number API (use this while the Sender ID is still pending).
+  if (env.TERMII_NUMBER_API === 'true') return sendViaTermiiNumber(phone, message);
   try {
     const res = await fetch(`${env.TERMII_BASE_URL}/api/sms/send`, {
       method: 'POST',
@@ -51,7 +73,10 @@ async function sendViaTermii(phone, message) {
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) {
-      logger.error({ status: res.status, body: await res.text().catch(() => '') }, 'Termii SMS failed');
+      const body = await res.text().catch(() => '');
+      logger.error({ status: res.status, body }, 'Termii SMS failed');
+      // Sender ID not approved yet: try the Number API instead.
+      if (/sender/i.test(body)) return sendViaTermiiNumber(phone, message);
       return false;
     }
     return true;
