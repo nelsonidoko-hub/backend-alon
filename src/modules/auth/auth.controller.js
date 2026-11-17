@@ -6,6 +6,14 @@ export const requestOtp = asyncHandler(async (req, res) => {
   res.json({ message: 'Code sent' });
 });
 
+export const requestEmailOtp = asyncHandler(async (req, res) => {
+  res.json({ message: 'Code sent', ...(await auth.requestEmailOtp(req.body)) });
+});
+
+export const verifyEmailOtp = asyncHandler(async (req, res) => {
+  res.json(await auth.verifyEmailOtp(req.body));
+});
+
 export const verifyOtp = asyncHandler(async (req, res) => {
   res.json(await auth.verifyOtp(req.body));
 });

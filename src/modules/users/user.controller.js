@@ -9,8 +9,9 @@ export const getMe = asyncHandler(async (req, res) => {
 });
 
 export const updateMe = asyncHandler(async (req, res) => {
-  const { name, emergencyContact, notificationPrefs } = req.body;
+  const { name, email, emergencyContact, notificationPrefs } = req.body;
   if (name) req.user.name = name;
+  if (email) req.user.email = email;
   if (emergencyContact) req.user.emergencyContact = emergencyContact;
   if (notificationPrefs) {
     const current = req.user.notificationPrefs?.toObject?.() ?? req.user.notificationPrefs ?? {};
@@ -50,7 +51,8 @@ export const confirmPhoneChange = asyncHandler(async (req, res) => {
   if (await User.exists({ phone, _id: { $ne: req.user._id } })) {
     throw new AppError(409, 'That number is already used by another account', 'PHONE_TAKEN');
   }
-  await consumeOtp(phone, code);
+  const proof = await consumeOtp(phone, code);
+  if (proof.channel !== 'sms') throw new AppError(400, 'Use the code sent by SMS to the new number', 'OTP_INVALID');
   req.user.phone = phone;
   req.user.phoneVerifiedAt = new Date();
   await req.user.save();

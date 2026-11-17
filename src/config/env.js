@@ -31,6 +31,10 @@ const schema = z.object({
   TERMII_API_KEY: z.string().optional(),
   TERMII_SENDER_ID: z.string().default('FoloRide'),
   TERMII_CHANNEL: z.enum(['generic', 'dnd', 'whatsapp']).default('generic'),
+  EMAIL_PROVIDER: z.enum(['brevo', 'resend']).optional(),
+  EMAIL_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.string().optional(),
+  EMAIL_FROM_NAME: z.string().optional(),
   TERMII_NUMBER_PATH: z.string().optional(), // only if Termii changes the Number API address
   TERMII_NUMBER_API: z.string().optional(), // 'true' = send through Termii's Number API (no Sender ID needed)
   TERMII_BASE_URL: z.string().default('https://api.ng.termii.com'),

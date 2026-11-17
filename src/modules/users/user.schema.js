@@ -12,6 +12,7 @@ const phone = z.string().transform((v, ctx) => {
 
 export const updateMeSchema = z.object({
   name: z.string().trim().min(2).max(80).optional(),
+  email: z.string().trim().toLowerCase().email().max(120).optional(),
   emergencyContact: z.object({ name: z.string().trim().min(2).max(80), phone }).optional(),
   notificationPrefs: z.object({ sms: z.boolean(), whatsapp: z.boolean().optional() }).optional(),
 });
