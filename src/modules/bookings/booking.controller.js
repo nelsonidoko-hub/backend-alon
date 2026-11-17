@@ -20,6 +20,10 @@ export const cancel = asyncHandler(async (req, res) => {
   res.json({ booking: await service.cancelByPassenger(req.user, req.params.id, req.body.reason) });
 });
 
+export const here = asyncHandler(async (req, res) => {
+  res.json({ booking: await service.markAtStop(req.user, req.params.id) });
+});
+
 export const shareLink = asyncHandler(async (req, res) => {
   res.json(await service.createShareLink(req.user, req.params.id));
 });

@@ -5,6 +5,7 @@ export const startSessionSchema = z.object({
   routeId: objectId,
   lat: lat.optional(),
   lng: lng.optional(),
+  seats: z.number().int().min(1).max(8).optional(), // passenger seats to offer; fewer than the vehicle has = comfort ride
 });
 
 export const seatsSchema = z

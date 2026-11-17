@@ -1,5 +1,6 @@
 import { DriverSession } from './session.model.js';
 import { Booking } from '../bookings/booking.model.js';
+import { seatTier, tierFare } from './pricing.js';
 import { getRouteGeometry, getFare } from '../routes/routes.service.js';
 import { announceSeats, forgetSession, getLivePosition, markOffline } from './sessions.live.js';
 import { notifyUser } from '../notifications/notifications.service.js';
@@ -46,10 +47,14 @@ export async function endActiveSession(driverId, reason = 'The driver went offli
   return session;
 }
 
-export async function startSession(driver, { routeId, lat, lng }) {
+export async function startSession(driver, { routeId, lat, lng, seats }) {
   await getRouteGeometry(routeId);
+  const capacity = driver.vehicleId.seatCapacity;
+  if (seats !== undefined && seats > capacity) {
+    throw new AppError(400, `Your vehicle has ${capacity} passenger seat${capacity === 1 ? '' : 's'}, so you can offer at most ${capacity}.`, 'TOO_MANY_SEATS');
+  }
   await endActiveSession(driver._id);
-  const total = driver.vehicleId.seatCapacity;
+  const total = seats ?? capacity; // offering fewer seats than the vehicle has makes it a comfort ride
   const hasLocation = lat !== undefined && lng !== undefined;
   const session = await DriverSession.create({
     driverId: driver._id,
@@ -150,7 +155,9 @@ export async function listLiveCabs(routeId, stopId, toStopId) {
       vehicle: s.vehicleId
         ? { plate: s.vehicleId.plate, make: s.vehicleId.make, model: s.vehicleId.model, colour: s.vehicleId.colour }
         : null,
-      fare,
+      tier: seatTier(s.seatsTotal),
+      baseFare: fare,
+      fare: tierFare(fare, s.seatsTotal),
     });
   }
   cabs.sort((a, b) => a.etaSeconds - b.etaSeconds);
@@ -173,6 +180,7 @@ export async function listSessionBookings(driver, sessionId) {
     .populate('passengerId', 'name ratingAvg ratingCount')
     .lean();
   return bookings.map((b) => ({
+    atStop: Boolean(b.atStopAt),
     id: String(b._id),
     status: b.status,
     seats: b.seats,

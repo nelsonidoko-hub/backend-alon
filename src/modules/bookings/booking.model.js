@@ -24,6 +24,9 @@ const bookingSchema = new mongoose.Schema(
     paymentMethod: { type: String, enum: ['cash', 'transfer', 'wallet'], default: 'cash' },
     heldKobo: { type: Number, default: 0 },
     settledAt: Date,
+    lateCancel: { type: Boolean, default: false }, // cancelled after the cab was arriving
+    cancelFeeKobo: { type: Number, default: 0 },
+    atStopAt: Date, // the rider tapped "I'm at the stop"
     paymentConfirmed: { type: Boolean, default: false },
     cancelledBy: { type: String, enum: ['passenger', 'driver', 'admin', 'system'] },
     cancelReason: String,
@@ -41,6 +44,7 @@ const bookingSchema = new mongoose.Schema(
 );
 
 bookingSchema.index({ passengerId: 1, status: 1 });
+bookingSchema.index({ passengerId: 1, cancelledAt: -1 });
 bookingSchema.index({ sessionId: 1, status: 1 });
 bookingSchema.index({ driverId: 1, completedAt: -1 });
 bookingSchema.index({ requestedAt: -1 });

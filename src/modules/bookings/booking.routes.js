@@ -19,6 +19,7 @@ passengerRouter.post('/', validate(createBookingSchema), c.create);
 passengerRouter.get('/active', c.active);
 passengerRouter.get('/', validate(historyQuerySchema, 'query'), c.history);
 passengerRouter.post('/:id/cancel', validate(idParams, 'params'), validate(cancelSchema), c.cancel);
+passengerRouter.post('/:id/here', validate(idParams, 'params'), c.here);
 passengerRouter.get('/:id/share-link', validate(idParams, 'params'), c.shareLink);
 passengerRouter.post('/:id/rating', validate(idParams, 'params'), validate(ratingSchema), c.rate);
 

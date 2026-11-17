@@ -8,6 +8,7 @@ export function toPublicCab(c) {
     sessionId: c.sessionId,
     seatsFree: c.seatsFree,
     seatsTotal: c.seatsTotal,
+    tier: c.tier,
     full: c.full,
     distanceMeters: roundDistance(c.distanceMeters),
     etaSeconds: c.etaSeconds,

@@ -1,3 +1,4 @@
+import { tierFare } from '../sessions/pricing.js';
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { Booking } from './booking.model.js';
@@ -16,6 +17,8 @@ import {
   ACTIVE_BOOKING_STATUSES,
   BOOKING_EXPIRY_MS,
   CAB_FRESH_MS,
+  LATE_CANCEL_FEE_NAIRA,
+  STRIKE_LIMIT,
   PASSED_METERS,
   SHARE_AFTER_TRIP_MS,
 } from '../../config/constants.js';
@@ -88,6 +91,11 @@ export async function presentBooking(input, { withLive = false, includeCode = tr
     cancelledBy: b.cancelledBy,
     cancelReason: b.cancelReason,
     rated: b.rated,
+    atStopAt: b.atStopAt,
+    // What the rider is told to build trust: the seat is theirs, and what happens to the money.
+    heldNaira: b.heldKobo ? Math.round(b.heldKobo / 100) : 0,
+    lateCancelFee: LATE_CANCEL_FEE_NAIRA,
+    cancelFee: b.cancelFeeKobo ? Math.round(b.cancelFeeKobo / 100) : 0,
   };
   if (includeCode && b.active) view.code = b.code;
 
@@ -121,6 +129,18 @@ export async function createBooking(user, { sessionId, fromStopId, toStopId, sea
     throw new AppError(409, 'You already have an active booking', 'ALREADY_BOOKED');
   }
 
+  if (paymentMethod !== 'wallet' && STRIKE_LIMIT > 0) {
+    const since = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+    const strikes = await Booking.countDocuments({
+      passengerId: user._id,
+      $or: [{ status: 'no_show' }, { lateCancel: true }],
+      updatedAt: { $gte: since },
+    });
+    if (strikes >= STRIKE_LIMIT) {
+      throw new AppError(403, 'You missed or late-cancelled several rides recently, so for now you can only book by paying from your wallet.', 'WALLET_ONLY');
+    }
+  }
+
   const session = await DriverSession.findOne({
     _id: sessionId,
     active: true,
@@ -147,7 +167,7 @@ export async function createBooking(user, { sessionId, fromStopId, toStopId, sea
     throw new AppError(409, 'This cab has already passed your stop', 'CAB_PASSED');
   }
 
-  const farePerSeat = await getFare(session.routeId, from.stopId, to.stopId);
+  const farePerSeat = tierFare(await getFare(session.routeId, from.stopId, to.stopId), session.seatsTotal);
 
   const bookingId = new mongoose.Types.ObjectId();
   const heldKobo = paymentMethod === 'wallet' ? toKobo(farePerSeat * seats) : 0;
@@ -226,26 +246,47 @@ export async function listHistory(user, { skip, limit }) {
 export async function cancelByPassenger(user, bookingId, reason) {
   const owned = await Booking.findOne({ _id: bookingId, passengerId: user._id });
   if (!owned) throw new AppError(404, 'Booking not found', 'NOT_FOUND');
-  const updated = await transition(bookingId, ['confirmed'], 'cancelled', {
+  // Free while the cab is still on its way. Once it is "arriving" the driver is waiting, so a small fee applies (and it counts as a strike).
+  const late = owned.status === 'arriving';
+  const feeKobo = late && owned.heldKobo ? Math.min(owned.heldKobo, toKobo(LATE_CANCEL_FEE_NAIRA)) : 0;
+  const updated = await transition(bookingId, ['confirmed', 'arriving'], 'cancelled', {
     cancelledBy: 'passenger',
     cancelReason: reason,
     cancelledAt: new Date(),
+    lateCancel: late,
+    cancelFeeKobo: feeKobo,
   });
-  if (!updated) {
-    if (owned.status === 'arriving') {
-      throw new AppError(409, 'The cab is almost at your stop and the booking can no longer be cancelled', 'CAB_ARRIVING');
-    }
-    throw new AppError(409, `A ${owned.status} booking cannot be cancelled`, 'NOT_CANCELLABLE');
-  }
+  if (!updated) throw new AppError(409, `A ${owned.status} booking cannot be cancelled`, 'NOT_CANCELLABLE');
   await releaseSeats(updated.sessionId, updated.seats);
   await settleBookingDoc('ride', updated);
   notifyUser(
     updated.driverUserId,
     'booking:status',
     { bookingId: String(updated._id), status: 'cancelled' },
-    { title: 'Booking cancelled', body: 'A passenger cancelled their booking.' }
+    { title: 'Booking cancelled', body: late ? 'A passenger cancelled as you arrived.' : 'A passenger cancelled their booking.' }
   );
   return presentBooking(updated, { includeCode: false });
+}
+
+/** The rider taps "I'm at the stop": the driver sees it, so they know the seat is really being used. */
+export async function markAtStop(user, bookingId) {
+  const b = await Booking.findOneAndUpdate(
+    { _id: bookingId, passengerId: user._id, status: { $in: ['confirmed', 'arriving'] }, atStopAt: null },
+    { $set: { atStopAt: new Date() } },
+    { new: true }
+  );
+  if (!b) {
+    const own = await Booking.findOne({ _id: bookingId, passengerId: user._id });
+    if (!own) throw new AppError(404, 'Booking not found', 'NOT_FOUND');
+    return presentBooking(own, { withLive: true });
+  }
+  notifyUser(
+    b.driverUserId,
+    'booking:status',
+    { bookingId: String(b._id), status: b.status, atStop: true },
+    { title: 'Rider is at the stop', body: 'Your passenger is waiting at the pick-up stop.' }
+  );
+  return presentBooking(b, { withLive: true });
 }
 
 async function driverBooking(driver, bookingId) {

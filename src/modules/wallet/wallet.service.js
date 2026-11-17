@@ -215,6 +215,8 @@ export async function settleBookingDoc(kind, b) {
   const charge =
     doc.status === 'completed'
       ? doc.heldKobo
+      : doc.status === 'cancelled' && doc.cancelFeeKobo > 0
+        ? doc.cancelFeeKobo
       : doc.status === 'no_show'
         ? Math.floor((doc.heldKobo * env.NO_SHOW_FEE_PERCENT) / 100)
         : 0;
