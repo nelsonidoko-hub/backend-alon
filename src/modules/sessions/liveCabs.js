@@ -20,7 +20,7 @@ export async function listMapCabs() {
     if (!pos) continue;
     try {
       const g = await getRouteGeometry(s.routeId?._id || s.routeId, { activeOnly: false });
-      if (project(g.path, pos).distFrom > OFF_ROUTE_METERS) continue; // too far from its route
+      if (OFF_ROUTE_METERS > 0 && project(g.path, pos).distFrom > OFF_ROUTE_METERS) continue; // too far from its route
     } catch { /* route unreadable: fall through and show the cab */ }
     out.push(toMapCab(s, pos, s.routeId?.name));
   }

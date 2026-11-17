@@ -9,6 +9,9 @@ import { Booking } from '../bookings/booking.model.js';
 import { getLivePosition } from '../sessions/sessions.live.js';
 import { endActiveSession } from '../sessions/sessions.service.js';
 import { adminCancel } from '../bookings/bookings.service.js';
+import { getRouteGeometry } from '../routes/routes.service.js';
+import { project } from '../../utils/geo.js';
+import { CAB_FRESH_MS, OFF_ROUTE_METERS } from '../../config/constants.js';
 
 export const liveSessions = asyncHandler(async (_req, res) => {
   const sessions = await DriverSession.find({ active: true, online: true })
@@ -16,15 +19,34 @@ export const liveSessions = asyncHandler(async (_req, res) => {
     .populate('vehicleId', 'plate')
     .populate('routeId', 'name')
     .lean();
+  // For each cab: would riders see it? If not, say why, so a missing cab can be explained.
+  const rows = [];
+  for (const s of sessions) {
+    const location = getLivePosition(s);
+    const age = s.lastSeen ? Math.round((Date.now() - new Date(s.lastSeen).getTime()) / 1000) : null;
+    let distFromRoute = null;
+    let why = '';
+    if (age == null || age * 1000 > CAB_FRESH_MS) why = `The phone has not reported for ${age == null ? 'a long time' : `${age} seconds`}. Keep the driver app open with the screen on.`;
+    else if (!location) why = 'No location yet. Check that location is allowed for the driver app.';
+    else {
+      try {
+        const g = await getRouteGeometry(s.routeId?._id || s.routeId, { activeOnly: false });
+        distFromRoute = Math.round(project(g.path, location).distFrom);
+        if (OFF_ROUTE_METERS > 0 && distFromRoute > OFF_ROUTE_METERS) why = `The cab is ${distFromRoute} m from its route (limit ${OFF_ROUTE_METERS} m). Drive near the route, or raise OFF_ROUTE_METERS on Render.`;
+      } catch { why = ''; }
+    }
+    rows.push({ s, location, age, distFromRoute, visible: !why, why });
+  }
   res.json({
-    sessions: sessions.map((s) => ({
+    sessions: rows.map(({ s, location, age, distFromRoute, visible, why }) => ({
+      ageSeconds: age, distFromRoute, visible, why,
       id: String(s._id),
       route: s.routeId?.name,
       driver: s.driverId?.userId ? { name: s.driverId.userId.name, phone: s.driverId.userId.phone } : null,
       plate: s.vehicleId?.plate,
       seatsFree: s.seatsFree,
       seatsTotal: s.seatsTotal,
-      location: getLivePosition(s),
+      location,
       lastSeen: s.lastSeen,
     })),
   });

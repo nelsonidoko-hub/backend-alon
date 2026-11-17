@@ -30,11 +30,13 @@ export const adminStopsRouter = Router();
 adminStopsRouter.get('/', c.adminListStops);
 adminStopsRouter.post('/', validate(stopSchema), c.adminCreateStop);
 adminStopsRouter.patch('/:id', validate(idParams, 'params'), validate(stopUpdateSchema), c.adminUpdateStop);
+adminStopsRouter.delete('/:id', validate(idParams, 'params'), c.adminDeleteStop);
 
 export const adminRoutesRouter = Router();
 adminRoutesRouter.get('/', c.adminListRoutes);
 adminRoutesRouter.post('/', validate(routeSchema), c.adminCreateRoute);
 adminRoutesRouter.patch('/:id', validate(idParams, 'params'), validate(routeUpdateSchema), c.adminUpdateRoute);
+adminRoutesRouter.delete('/:id', validate(idParams, 'params'), c.adminDeleteRoute);
 
 export const adminFaresRouter = Router();
 adminFaresRouter.get('/', validate(fareListQuerySchema, 'query'), c.adminListFares);

@@ -130,7 +130,7 @@ export async function listLiveCabs(routeId, stopId, toStopId) {
     const pos = getLivePosition(s);
     if (!pos) continue;
     const hit = project(g.path, pos);
-    if (hit.distFrom > OFF_ROUTE_METERS) continue; // not actually on this route
+    if (OFF_ROUTE_METERS > 0 && hit.distFrom > OFF_ROUTE_METERS) continue; // not actually on this route
     const remaining = stop.distAlong - hit.distAlong;
     if (remaining < -PASSED_METERS) { passed += 1; continue; }
     cabs.push({

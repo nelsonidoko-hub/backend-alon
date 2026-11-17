@@ -3,6 +3,7 @@ import { AppError } from '../../utils/AppError.js';
 import { Stop } from './stop.model.js';
 import { Route } from './route.model.js';
 import { Fare } from './fare.model.js';
+import { Booking } from '../bookings/booking.model.js';
 import {
   listRoutes,
   getRouteDetail,
@@ -153,4 +154,26 @@ export const adminGenerateFares = asyncHandler(async (req, res) => {
 export const adminPreviewFares = asyncHandler(async (req, res) => {
   const { routeId, base, perStop, mode, perKm, minFare, roundTo } = req.body;
   res.json(await previewFares(routeId, base, perStop, { mode, perKm, minFare, roundTo }));
+});
+
+// Remove a stop for good, but only when no route uses it (otherwise the route would break).
+export const adminDeleteStop = asyncHandler(async (req, res) => {
+  const onRoute = await Route.findOne({ 'stops.stopId': req.params.id }).select('name').lean();
+  if (onRoute) throw new AppError(409, `This stop is on the route "${onRoute.name}". Take it off that route first.`, 'STOP_IN_USE');
+  const stop = await Stop.findByIdAndDelete(req.params.id);
+  if (!stop) throw new AppError(404, 'Stop not found', 'NOT_FOUND');
+  clearRouteCache();
+  res.json({ ok: true });
+});
+
+// Remove a route and its fares. A route that already has bookings is kept (hide it instead) so past trips and receipts still make sense.
+export const adminDeleteRoute = asyncHandler(async (req, res) => {
+  if (await Booking.exists({ routeId: req.params.id })) {
+    throw new AppError(409, 'This route already has bookings, so it cannot be deleted. Hide it instead.', 'ROUTE_IN_USE');
+  }
+  const route = await Route.findByIdAndDelete(req.params.id);
+  if (!route) throw new AppError(404, 'Route not found', 'NOT_FOUND');
+  await Fare.deleteMany({ routeId: req.params.id });
+  clearRouteCache();
+  res.json({ ok: true });
 });
