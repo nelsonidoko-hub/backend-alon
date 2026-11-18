@@ -1,3 +1,4 @@
+import { vehicleKind } from '../drivers/vehicle.model.js';
 import { DriverSession } from './session.model.js';
 import { Booking } from '../bookings/booking.model.js';
 import { seatTier, tierFare } from './pricing.js';
@@ -127,7 +128,7 @@ export async function listLiveCabs(routeId, stopId, toStopId) {
       select: 'ratingAvg ratingCount profilePhotoKey userId',
       populate: { path: 'userId', select: 'name' },
     })
-    .populate('vehicleId', 'plate make model colour')
+    .populate('vehicleId', 'plate make model colour kind seatCapacity')
     .lean();
 
   const cabs = [];
@@ -154,7 +155,7 @@ export async function listLiveCabs(routeId, stopId, toStopId) {
         photoUrl: await fileUrl(s.driverId?.profilePhotoKey),
       },
       vehicle: s.vehicleId
-        ? { plate: s.vehicleId.plate, make: s.vehicleId.make, model: s.vehicleId.model, colour: s.vehicleId.colour }
+        ? { plate: s.vehicleId.plate, make: s.vehicleId.make, model: s.vehicleId.model, colour: s.vehicleId.colour, kind: vehicleKind(s.vehicleId), seatCapacity: s.vehicleId.seatCapacity }
         : null,
       tier: seatTier(s.seatsTotal, s.seatsCapacity),
       baseFare: fare,

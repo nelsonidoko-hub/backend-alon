@@ -1,3 +1,4 @@
+import { vehicleKind } from '../drivers/vehicle.model.js';
 import { DriverSession } from './session.model.js';
 import { getLivePosition } from './sessions.live.js';
 import { toMapCab } from './mapCab.js';
@@ -12,6 +13,7 @@ export async function listMapCabs() {
     lastSeen: { $gte: new Date(Date.now() - CAB_FRESH_MS) },
   })
     .populate('routeId', 'name')
+    .populate('vehicleId', 'kind seatCapacity')
     .limit(200)
     .lean();
   const out = [];
@@ -25,7 +27,7 @@ export async function listMapCabs() {
       const g = await getRouteGeometry(s.routeId?._id || s.routeId, { activeOnly: false });
       offRoute = OFF_ROUTE_METERS > 0 && project(g.path, pos).distFrom > OFF_ROUTE_METERS;
     } catch { /* route unreadable: show the cab normally */ }
-    out.push({ ...toMapCab(s, pos, s.routeId?.name), offRoute });
+    out.push({ ...toMapCab(s, pos, s.routeId?.name), kind: vehicleKind(s.vehicleId), offRoute });
   }
   return out;
 }

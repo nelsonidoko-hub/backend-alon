@@ -25,7 +25,8 @@ export const applySchema = z.object({
     model: z.string().trim().min(1).max(40),
     colour: z.string().trim().min(2).max(30),
     year: z.number().int().min(1990).max(2100).optional(),
-    seatCapacity: z.number().int().min(1).max(8),
+    seatCapacity: z.number().int().min(1).max(60),
+    kind: z.enum(['car', 'minivan', 'bus', 'coach']).optional(),
   }),
 });
 

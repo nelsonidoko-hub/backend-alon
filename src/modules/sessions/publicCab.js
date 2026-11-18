@@ -9,6 +9,7 @@ export function toPublicCab(c) {
     seatsFree: c.seatsFree,
     seatsTotal: c.seatsTotal,
     tier: c.tier,
+    kind: c.kind,
     full: c.full,
     distanceMeters: roundDistance(c.distanceMeters),
     etaSeconds: c.etaSeconds,
