@@ -10,7 +10,7 @@ import { getLivePosition } from '../sessions/sessions.live.js';
 import { endActiveSession } from '../sessions/sessions.service.js';
 import { adminCancel } from '../bookings/bookings.service.js';
 import { getRouteGeometry } from '../routes/routes.service.js';
-import { project } from '../../utils/geo.js';
+import { project, haversine } from '../../utils/geo.js';
 import { CAB_FRESH_MS, OFF_ROUTE_METERS } from '../../config/constants.js';
 
 export const liveSessions = asyncHandler(async (_req, res) => {
@@ -26,20 +26,24 @@ export const liveSessions = asyncHandler(async (_req, res) => {
     const age = s.lastSeen ? Math.round((Date.now() - new Date(s.lastSeen).getTime()) / 1000) : null;
     let distFromRoute = null;
     let why = '';
+    let nearestStop = null;
     if (age == null || age * 1000 > CAB_FRESH_MS) why = `The phone has not reported for ${age == null ? 'a long time' : `${age} seconds`}. Keep the driver app open with the screen on.`;
     else if (!location) why = 'No location yet. Check that location is allowed for the driver app.';
     else {
       try {
         const g = await getRouteGeometry(s.routeId?._id || s.routeId, { activeOnly: false });
         distFromRoute = Math.round(project(g.path, location).distFrom);
+        // The closest stop of this route, with its coordinates, so a wrongly placed stop can be told apart from a wrong GPS fix.
+        const near = g.stops.map((st) => ({ st, d: haversine(location, st.location) })).sort((a, b) => a.d - b.d)[0];
+        if (near) nearestStop = { name: near.st.name, meters: Math.round(near.d), lat: near.st.location.lat, lng: near.st.location.lng };
         if (OFF_ROUTE_METERS > 0 && distFromRoute > OFF_ROUTE_METERS) why = `The cab is ${distFromRoute} m from its route (limit ${OFF_ROUTE_METERS} m). Drive near the route, or raise OFF_ROUTE_METERS on Render.`;
       } catch { why = ''; }
     }
-    rows.push({ s, location, age, distFromRoute, visible: !why, why });
+    rows.push({ s, location, age, distFromRoute, nearestStop, visible: !why, why });
   }
   res.json({
-    sessions: rows.map(({ s, location, age, distFromRoute, visible, why }) => ({
-      ageSeconds: age, distFromRoute, visible, why,
+    sessions: rows.map(({ s, location, age, distFromRoute, nearestStop, visible, why }) => ({
+      ageSeconds: age, distFromRoute, nearestStop, visible, why,
       id: String(s._id),
       route: s.routeId?.name,
       driver: s.driverId?.userId ? { name: s.driverId.userId.name, phone: s.driverId.userId.phone } : null,

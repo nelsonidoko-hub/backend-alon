@@ -18,11 +18,14 @@ export async function listMapCabs() {
   for (const s of sessions) {
     const pos = getLivePosition(s);
     if (!pos) continue;
+    // Every online cab is shown on the map. One that is far from its route is flagged, so the app can show it dimmed
+    // ("online, not on its route yet") instead of hiding it. It still cannot be booked (see listLiveCabs).
+    let offRoute = false;
     try {
       const g = await getRouteGeometry(s.routeId?._id || s.routeId, { activeOnly: false });
-      if (OFF_ROUTE_METERS > 0 && project(g.path, pos).distFrom > OFF_ROUTE_METERS) continue; // too far from its route
-    } catch { /* route unreadable: fall through and show the cab */ }
-    out.push(toMapCab(s, pos, s.routeId?.name));
+      offRoute = OFF_ROUTE_METERS > 0 && project(g.path, pos).distFrom > OFF_ROUTE_METERS;
+    } catch { /* route unreadable: show the cab normally */ }
+    out.push({ ...toMapCab(s, pos, s.routeId?.name), offRoute });
   }
   return out;
 }
