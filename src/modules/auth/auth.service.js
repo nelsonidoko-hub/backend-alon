@@ -97,7 +97,17 @@ export async function verifyEmailOtp({ email, code, name, role }) {
     if (name && !user.name) user.name = name;
     await user.save();
   } else {
-    user = await User.create({ name, email, role: role === 'driver' ? 'driver' : 'passenger' });
+    const data = { name, email, role: role === 'driver' ? 'driver' : 'passenger' };
+    try {
+      user = await User.create(data);
+    } catch (err) {
+      // An old database index treats "no phone" as one shared value. Fix it right now and try once more.
+      if (err.code === 11000 && err.keyPattern?.phone) {
+        const { ensurePhoneIndex } = await import('../../config/db.js');
+        await ensurePhoneIndex();
+        user = await User.create(data);
+      } else throw err;
+    }
     welcomeEmail(user);
   }
   await Otp.deleteOne({ phone: emailKey(email) });

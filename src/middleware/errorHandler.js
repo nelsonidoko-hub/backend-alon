@@ -13,7 +13,8 @@ export function errorHandler(err, req, res, _next) {
   if (err.code === 11000) {
     status = 409;
     code = 'DUPLICATE';
-    message = 'A record with this value already exists';
+    const field = Object.keys(err.keyPattern || err.keyValue || {})[0];
+    message = { phone: 'That phone number already has an account', email: 'That email already has an account', googleId: 'That Google account is already linked', facebookId: 'That Facebook account is already linked' }[field] || 'A record with this value already exists';
     details = err.keyValue;
   } else if (err.name === 'CastError') {
     status = 400;
