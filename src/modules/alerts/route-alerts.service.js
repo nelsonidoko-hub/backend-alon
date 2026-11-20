@@ -82,6 +82,7 @@ export async function processRouteAlerts(session, pos) {
         body: `A cab on ${g.route.name} is about ${minutes} min from ${stop.name}. ${session.seatsFree} seat${session.seatsFree === 1 ? '' : 's'} free. Tap to book.`,
         url: '/ride',
         whatsapp: true, // FEATURE: WHATSAPP
+        email: true, // free fallback so the alert still reaches a rider whose phone has no push set up
       }
     );
   }

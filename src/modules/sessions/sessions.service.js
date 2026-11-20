@@ -7,7 +7,7 @@ import { announceSeats, forgetSession, getLivePosition, markOffline } from './se
 import { notifyUser } from '../notifications/notifications.service.js';
 import { emitToRoute, joinUserToRoom, closeRoom } from '../../realtime/io.js';
 import { fileUrl } from '../uploads/storage.service.js';
-import { settleBookingDoc } from '../wallet/wallet.service.js';
+import { settleBookingDoc, assertCanGoOnline } from '../wallet/wallet.service.js';
 import { lookingByStop } from '../demand/demand.service.js'; // FEATURE: DRIVER DEMAND ALERTS
 import { AppError } from '../../utils/AppError.js';
 import { project, etaSeconds } from '../../utils/geo.js';
@@ -49,6 +49,7 @@ export async function endActiveSession(driverId, reason = 'The driver went offli
 }
 
 export async function startSession(driver, { routeId, lat, lng, seats }) {
+  await assertCanGoOnline(driver.userId);
   await getRouteGeometry(routeId);
   const capacity = driver.vehicleId.seatCapacity;
   if (seats !== undefined && seats > capacity) {

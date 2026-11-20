@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import { logger, logOnce } from '../utils/logger.js';
 import { markStaleSessions, closeAbandonedSessions } from '../modules/sessions/sessions.service.js';
 import { expireStaleBookings } from '../modules/bookings/bookings.service.js';
-import { reconcileSettlements } from '../modules/wallet/wallet.service.js';
+import { reconcileSettlements, reconcileCashCommissions } from '../modules/wallet/wallet.service.js';
 import {
   sendCommuteReminders,
   expireCommuteTrips,
@@ -21,6 +21,7 @@ export function startJobs() {
       await sendCommuteReminders();
       await expireCommuteTrips();
       await reconcileSettlements();
+      await reconcileCashCommissions();
     } catch (err) {
       logOnce('error', `periodic:${err?.name}`, { err }, 'Periodic job failed (will retry every 30s, shown once a minute)');
     } finally {

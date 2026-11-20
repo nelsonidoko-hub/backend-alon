@@ -11,11 +11,18 @@ const mine = (id) => ({ $or: [{ passengerId: id }, { driverUserId: id }] });
 
 /** What the driver actually received for each wallet-paid trip, taken from the ledger. */
 async function netFor(kind, docs) {
-  const refs = docs.filter((d) => d.paymentMethod === 'wallet' && d.heldKobo > 0).map((d) => `settle:${kind}:${d._id}:driver`);
+  const walletRefs = docs.filter((d) => d.paymentMethod === 'wallet' && d.heldKobo > 0).map((d) => `settle:${kind}:${d._id}:driver`);
+  const cashRefs = docs.filter((d) => d.paymentMethod !== 'wallet').map((d) => `cashfee:${kind}:${d._id}:driver`);
+  const refs = [...walletRefs, ...cashRefs];
   const rows = refs.length ? await LedgerEntry.find({ ref: { $in: refs } }).select('ref amount').lean() : [];
   const byRef = new Map(rows.map((r) => [r.ref, r.amount]));
   return (d, grossKobo) => {
-    if (d.paymentMethod !== 'wallet' || !d.heldKobo) return { net: grossKobo, commission: 0 };
+    if (d.paymentMethod !== 'wallet') {
+      // Cash: the driver kept the money, and the commission (if any) was taken from their wallet afterwards.
+      const fee = byRef.get(`cashfee:${kind}:${d._id}:driver`);
+      return fee == null ? { net: grossKobo, commission: 0 } : { net: grossKobo + fee, commission: -fee };
+    }
+    if (!d.heldKobo) return { net: grossKobo, commission: 0 };
     const net = byRef.get(`settle:${kind}:${d._id}:driver`);
     return net == null ? { net: grossKobo, commission: 0 } : { net, commission: grossKobo - net };
   };

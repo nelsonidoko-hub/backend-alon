@@ -23,7 +23,8 @@ export const updateMe = asyncHandler(async (req, res) => {
 });
 
 export const getPushKey = (_req, res) => {
-  res.json({ publicKey: env.VAPID_PUBLIC_KEY || null });
+  const k = String(env.VAPID_PUBLIC_KEY || '').trim().replace(/^["']|["']$/g, '').replace(/=+$/, '').replace(/\s+/g, '');
+  res.json({ publicKey: k || null });
 };
 
 export const savePushSubscription = asyncHandler(async (req, res) => {

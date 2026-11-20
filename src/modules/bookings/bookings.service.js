@@ -9,7 +9,7 @@ import { getRouteGeometry, getFare } from '../routes/routes.service.js';
 import { announceSeats, getLivePosition } from '../sessions/sessions.live.js';
 import { notifyUser } from '../notifications/notifications.service.js';
 import { joinUserToRoom } from '../../realtime/io.js';
-import { toKobo, holdFunds, releaseHold, settleBookingDoc } from '../wallet/wallet.service.js';
+import { toKobo, holdFunds, releaseHold, settleBookingDoc, chargeCashCommission } from '../wallet/wallet.service.js';
 import { project, etaSeconds } from '../../utils/geo.js';
 import { fileUrl } from '../uploads/storage.service.js';
 import { AppError } from '../../utils/AppError.js';
@@ -342,6 +342,7 @@ export async function complete(driver, bookingId, paymentConfirmed) {
   if (!updated) throw invalidState(b);
   await releaseSeats(updated.sessionId, updated.seats);
   await settleBookingDoc('ride', updated);
+  await chargeCashCommission(updated);
   await Driver.updateOne({ _id: driver._id }, { $inc: { totalTrips: 1 } });
   presentBooking(updated, { includeCode: false }).then((v) => emailUser(updated.passengerId, {
     subject: `Trip receipt: ${v.from.name} to ${v.to.name}`,

@@ -65,6 +65,8 @@ const schema = z.object({
   PAYSTACK_SECRET_KEY: z.string().optional(),
   PAYSTACK_BASE_URL: z.string().default('https://api.paystack.co'),
   COMMISSION_PERCENT: z.coerce.number().min(0).max(50).default(10),
+  CASH_DEBT_LIMIT_NAIRA: z.coerce.number().min(0).default(2000), // a driver owing more than this in cash-trip commission cannot go online until they top up
+  DRIVER_TRIAL_DAYS: z.coerce.number().int().min(0).max(365).default(60), // new drivers pay no commission for this many days after approval
   COMMUTE_COMMISSION_PERCENT: z.coerce.number().min(0).max(50).default(0),
   NO_SHOW_FEE_PERCENT: z.coerce.number().min(0).max(100).default(0),
   WITHDRAWAL_MODE: z.enum(['manual', 'auto']).default('manual'),

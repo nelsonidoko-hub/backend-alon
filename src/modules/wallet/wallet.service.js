@@ -2,10 +2,12 @@ import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { Wallet, LedgerEntry, Topup, BankAccount, Withdrawal } from './wallet.models.js';
 import { Booking } from '../bookings/booking.model.js';
+import { Driver } from '../drivers/driver.model.js';
+import { commissionFor } from '../drivers/trial.js';
 import { CommuteBooking } from '../commute/commute.models.js';
 import { notifyUser } from '../notifications/notifications.service.js';
 import { paystack, paymentsEnabled, PaystackError } from './paystack.service.js';
-import { env, riderUrl } from '../../config/env.js';
+import { env, riderUrl, driverUrl } from '../../config/env.js';
 import { AppError } from '../../utils/AppError.js';
 import { logger } from '../../utils/logger.js';
 
@@ -52,11 +54,11 @@ async function ensurePlatformWallet() {
 }
 
 /** Moves money on one wallet and writes the ledger line. Must run inside withTx. */
-async function post(session, walletQuery, { type, amount = 0, held = 0, ref, meta, allowFrozen = false }) {
+async function post(session, walletQuery, { type, amount = 0, held = 0, ref, meta, allowFrozen = false, allowNegative = false }) {
   const filter = { ...walletQuery };
-  if (amount < 0) filter.balance = { $gte: -amount };
+  if (amount < 0 && !allowNegative) filter.balance = { $gte: -amount };
   if (held < 0) filter.held = { $gte: -held };
-  if (!allowFrozen && (amount < 0 || held > 0)) filter.status = 'active';
+  if (!allowFrozen && !allowNegative && (amount < 0 || held > 0)) filter.status = 'active';
   const w = await Wallet.findOneAndUpdate(filter, { $inc: { balance: amount, held } }, { new: true, session });
   if (!w) throw new AppError(402, 'Not enough money in the wallet, or the wallet is frozen', 'INSUFFICIENT_FUNDS');
   await LedgerEntry.create(
@@ -81,6 +83,8 @@ export async function walletView(user) {
     minWithdrawal: env.MIN_WITHDRAWAL_KOBO,
     withdrawalFee: env.WITHDRAWAL_FEE_KOBO,
     commissionPercent: env.COMMISSION_PERCENT,
+    owed: Math.max(0, -w.balance), // commission from cash trips that has not been paid yet
+    debtLimit: toKobo(env.CASH_DEBT_LIMIT_NAIRA),
   };
 }
 
@@ -111,7 +115,7 @@ export async function startTopup(user, amountNaira) {
       amount: amountKobo,
       reference,
       currency: 'NGN',
-      callback_url: `${riderUrl}/wallet`,
+      callback_url: `${user.role === 'driver' ? driverUrl : riderUrl}/wallet`,
       metadata: { userId: String(user._id) },
     },
   });
@@ -208,6 +212,12 @@ async function settle({ kind, refId, passengerId, driverUserId, heldKobo, charge
 export const releaseHold = ({ userId, driverUserId, kind, refId, kobo }) =>
   settle({ kind, refId, passengerId: userId, driverUserId, heldKobo: kobo, chargeKobo: 0, commissionPercent: 0, reason: 'released' });
 
+/** 0% while the driver is in their free trial, otherwise COMMISSION_PERCENT. The date that counts is when the trip finished. */
+async function rideCommission(doc) {
+  const driver = await Driver.findOne({ userId: doc.driverUserId }).select('approvedAt createdAt').lean();
+  return commissionFor(driver, { trialDays: env.DRIVER_TRIAL_DAYS, commissionPercent: env.COMMISSION_PERCENT, when: doc.completedAt || Date.now() });
+}
+
 /** Settles a finished booking: full fare if completed, a fee if no-show, otherwise a full release. */
 export async function settleBookingDoc(kind, b) {
   if (!b || !b.heldKobo || b.settledAt) return null;
@@ -228,7 +238,7 @@ export async function settleBookingDoc(kind, b) {
       driverUserId: doc.driverUserId,
       heldKobo: doc.heldKobo,
       chargeKobo: charge,
-      commissionPercent: kind === 'ride' ? env.COMMISSION_PERCENT : env.COMMUTE_COMMISSION_PERCENT,
+      commissionPercent: kind === 'ride' ? await rideCommission(doc) : env.COMMUTE_COMMISSION_PERCENT,
       reason: doc.status,
     });
     await (kind === 'ride' ? Booking : CommuteBooking).updateOne({ _id: doc._id }, { $set: { settledAt: new Date() } });
@@ -257,14 +267,20 @@ let bankCache = { at: 0, list: [] };
 
 export async function listBanks() {
   if (Date.now() - bankCache.at < 24 * 60 * 60 * 1000 && bankCache.list.length) return bankCache.list;
-  const all = [];
-  for (let page = 1; page <= 5; page++) {
-    const d = await paystack(`/bank?country=nigeria&perPage=100&page=${page}`);
-    all.push(...d.data.filter((b) => b.active !== false && b.currency === 'NGN'));
-    if (d.data.length < 100) break;
+  // Paystack pages with a cursor ("next"); the old ?page= number is ignored, which used to return the same first 100 banks five times.
+  const byCode = new Map();
+  let cursor = '';
+  for (let i = 0; i < 12; i++) {
+    const d = await paystack(`/bank?country=nigeria&perPage=100${cursor ? `&next=${encodeURIComponent(cursor)}` : ''}`);
+    for (const b of d.data || []) if (b.active !== false && b.currency === 'NGN' && b.code && !byCode.has(b.code)) byCode.set(b.code, { name: String(b.name).trim(), code: b.code });
+    cursor = d.meta?.next || '';
+    if (!cursor || !(d.data || []).length) break;
   }
-  bankCache = { at: Date.now(), list: all.map((b) => ({ name: b.name, code: b.code })).sort((a, b) => a.name.localeCompare(b.name)) };
-  return bankCache.list;
+  // Same bank listed twice under different codes: keep one per name.
+  const seen = new Set();
+  const list = [...byCode.values()].filter((b) => { const k = b.name.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a, b) => a.name.localeCompare(b.name));
+  if (list.length) bankCache = { at: Date.now(), list };
+  return list;
 }
 
 export const listBankAccounts = (userId) => BankAccount.find({ userId, active: true }).sort('-createdAt').lean();
@@ -423,4 +439,46 @@ export async function adminAdjust(admin, userId, amountKobo, reason) {
 export async function adminFreeze(userId, frozen) {
   await ensureWallet(userId);
   return Wallet.findOneAndUpdate({ userId }, { $set: { status: frozen ? 'frozen' : 'active' } }, { new: true });
+}
+
+
+/* ---------- commission on cash trips ---------- */
+// A cash trip never passes through the wallet, so the driver holds the whole fare. After the free trial the commission is
+// taken from the driver's wallet instead. Their balance can go below zero (they "owe" it); wallet-paid trips pay it down
+// first, and a driver who owes more than CASH_DEBT_LIMIT_NAIRA cannot go online until they top up.
+
+export async function chargeCashCommission(b) {
+  if (!b || b.status !== 'completed' || b.paymentMethod === 'wallet') return null;
+  const percent = await rideCommission(b);
+  const kobo = Math.floor((toKobo(b.fare) * percent) / 100);
+  if (kobo <= 0) return null;
+  await ensureWallet(b.driverUserId);
+  await ensurePlatformWallet();
+  const base = `cashfee:ride:${b._id}`;
+  try {
+    return await withTx(async (session) => {
+      await post(session, { userId: b.driverUserId }, { type: 'commission', amount: -kobo, ref: `${base}:driver`, meta: { kind: 'ride', refId: String(b._id), cash: true }, allowNegative: true });
+      await post(session, { isPlatform: true }, { type: 'commission', amount: kobo, ref: `${base}:platform`, meta: { kind: 'ride', refId: String(b._id), cash: true }, allowFrozen: true });
+      return { commission: kobo };
+    });
+  } catch (err) {
+    logger.error({ err, id: String(b._id) }, 'Cash commission failed, it will be retried');
+    return null;
+  }
+}
+
+/** Retries cash commissions that failed (the ledger reference makes a repeat harmless). */
+export async function reconcileCashCommissions() {
+  const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const rows = await Booking.find({ status: 'completed', paymentMethod: { $ne: 'wallet' }, completedAt: { $gte: since } }).limit(200);
+  for (const b of rows) await chargeCashCommission(b);
+  return rows.length;
+}
+
+export async function assertCanGoOnline(userId) {
+  const limit = toKobo(env.CASH_DEBT_LIMIT_NAIRA);
+  const w = await Wallet.findOne({ userId }).select('balance').lean();
+  if (w && w.balance < -limit) {
+    throw new AppError(402, `You owe FoloRide ${naira(-w.balance)} in commission from cash trips. Top up your wallet to go online.`, 'COMMISSION_DUE');
+  }
 }

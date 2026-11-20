@@ -1,4 +1,5 @@
-import { driverUrl } from '../../config/env.js';
+import { driverUrl, env } from '../../config/env.js';
+import { trialInfo } from './trial.js';
 import { AppError } from '../../utils/AppError.js';
 import { Driver } from './driver.model.js';
 import { Vehicle } from './vehicle.model.js';
@@ -59,7 +60,12 @@ export async function applyAsDriver(user, data) {
 
 export async function getDriverStatus(user) {
   const driver = await Driver.findOne({ userId: user._id }).populate('vehicleId');
-  return driver || { status: 'not_applied' };
+  const opts = { trialDays: env.DRIVER_TRIAL_DAYS, commissionPercent: env.COMMISSION_PERCENT };
+  if (!driver) return { status: 'not_applied', trial: { days: opts.trialDays, commissionPercent: opts.commissionPercent, active: false } };
+  const o = driver.toObject();
+  // Drivers still waiting for approval have not started the trial yet.
+  o.trial = driver.status === 'approved' || driver.status === 'suspended' ? trialInfo(driver, opts) : { days: opts.trialDays, commissionPercent: opts.commissionPercent, active: false, daysLeft: opts.trialDays, notStarted: true };
+  return o;
 }
 
 export async function listDrivers(status) {
@@ -96,7 +102,7 @@ export const approveDriver = (id, admin) =>
     admin,
     { status: 'approved', approvedBy: admin._id, approvedAt: new Date(), rejectionReason: null },
     'Your FoloRide driver account is approved. You can go online now.',
-    { subject: 'Your FoloRide driver account is approved', heading: 'You are approved', lines: ['Your driver application has been approved. Open the driver app, choose your route and go online to start receiving riders.'], button: { label: 'Open the driver app', url: driverUrl } }
+    { subject: 'Your FoloRide driver account is approved', heading: 'You are approved', lines: ['Your driver application has been approved. Open the driver app, choose your route and go online to start receiving riders.', ...(env.DRIVER_TRIAL_DAYS ? [`Your first ${env.DRIVER_TRIAL_DAYS} days are commission-free, so you keep every naira you earn. After that FoloRide takes ${env.COMMISSION_PERCENT}% of every trip. On cash trips you keep the cash and the commission is taken from your wallet, so keep a little balance in it.`] : [])], button: { label: 'Open the driver app', url: driverUrl } }
   );
 
 export const rejectDriver = (id, admin, reason) =>

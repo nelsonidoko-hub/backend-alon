@@ -9,10 +9,18 @@ import { sendSms } from './sms.service.js';
 import { Notification } from './notification.model.js';
 import { whatsappNotify } from '../whatsapp/whatsapp.notify.js'; // FEATURE: WHATSAPP
 
-export const pushEnabled = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
-if (pushEnabled) {
-  webpush.setVapidDetails(env.VAPID_SUBJECT, env.VAPID_PUBLIC_KEY, env.VAPID_PRIVATE_KEY);
+// Render env values sometimes arrive with quotes, spaces or "=" padding. Clean them, and never let a bad key stop the server.
+const cleanKey = (v) => String(v || '').trim().replace(/^["']|["']$/g, '').replace(/=+$/, '').replace(/\s+/g, '');
+let vapidOk = false;
+if (env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY) {
+  try {
+    webpush.setVapidDetails(env.VAPID_SUBJECT, cleanKey(env.VAPID_PUBLIC_KEY), cleanKey(env.VAPID_PRIVATE_KEY));
+    vapidOk = true;
+  } catch (err) {
+    logger.error({ err: err.message }, 'VAPID keys are invalid, so phone push is OFF. Generate them with: npx web-push generate-vapid-keys, and paste each value with no quotes or spaces.');
+  }
 }
+export const pushEnabled = vapidOk;
 
 export const presentNotification = (n) => ({
   id: String(n._id),
