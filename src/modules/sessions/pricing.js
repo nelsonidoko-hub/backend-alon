@@ -1,4 +1,4 @@
-import { COMFORT_MAX_MULTIPLIER } from '../../config/constants.js';
+import { COMFORT_MAX_MULTIPLIER, DROP_PREMIUM_PERCENT } from '../../config/constants.js';
 
 // A driver registers their own vehicle with however many passenger seats it has, so there is no fixed "standard" number.
 // A cab is "standard" when it offers every seat its vehicle has, and "comfort" when the driver offers fewer.
@@ -10,4 +10,11 @@ export function tierFare(baseFare, seatsTotal, seatsCapacity) {
   const raw = (baseFare * seatsCapacity) / Math.max(1, seatsTotal);
   const capped = Math.min(raw, baseFare * COMFORT_MAX_MULTIPLIER);
   return Math.max(baseFare, Math.ceil(capped / 50) * 50);
+}
+
+/** Price of booking the whole cab ("drop"): every seat's fare plus the drop premium, rounded up to N50. */
+export function dropFare(baseFare, seatsTotal, seatsCapacity, premiumPercent = DROP_PREMIUM_PERCENT) {
+  const perSeat = tierFare(baseFare, seatsTotal, seatsCapacity);
+  if (perSeat == null || !seatsTotal) return null;
+  return Math.ceil((perSeat * seatsTotal * (1 + premiumPercent / 100)) / 50) * 50;
 }

@@ -11,6 +11,7 @@ const bookingSchema = new mongoose.Schema(
     routeId: ref('Route'),
     fromStopId: ref('Stop'),
     toStopId: ref('Stop'),
+    kind: { type: String, enum: ['seat', 'drop'], default: 'seat' }, // drop = the rider booked the whole cab
     seats: { type: Number, required: true, min: 1 },
     farePerSeat: { type: Number, required: true },
     fare: { type: Number, required: true },

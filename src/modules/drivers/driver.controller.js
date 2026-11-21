@@ -66,3 +66,7 @@ export const recentTrips = asyncHandler(async (req, res) => {
   }
   res.json({ trips: out });
 });
+
+export const adminClearCancelLock = asyncHandler(async (req, res) => {
+  res.json(await service.clearCancelLock(req.params.id));
+});

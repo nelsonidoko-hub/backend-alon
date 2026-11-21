@@ -20,6 +20,7 @@ const driverSchema = new mongoose.Schema(
     ratingAvg: { type: Number, default: 0 },
     ratingCount: { type: Number, default: 0 },
     totalTrips: { type: Number, default: 0 },
+    cancelLockedUntil: { type: Date, default: null }, // set when the driver cancels too many bookings in a day
     cancelledTrips: { type: Number, default: 0 }, // bookings the driver cancelled before pickup
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     approvedAt: Date,

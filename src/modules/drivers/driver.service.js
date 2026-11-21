@@ -1,3 +1,4 @@
+import { Booking } from '../bookings/booking.model.js';
 import { driverUrl, env } from '../../config/env.js';
 import { trialInfo } from './trial.js';
 import { AppError } from '../../utils/AppError.js';
@@ -76,9 +77,13 @@ export async function listDrivers(status) {
     .populate('userId', 'name phone')
     .populate('vehicleId')
     .lean();
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const today = await Booking.aggregate([{ $match: { cancelledBy: 'driver', cancelledAt: { $gte: since } } }, { $group: { _id: '$driverId', n: { $sum: 1 } } }]);
+  const cancelsToday = new Map(today.map((r) => [String(r._id), r.n]));
   return Promise.all(
     drivers.map(async (d) => ({
       ...d,
+      cancelsToday: cancelsToday.get(String(d._id)) || 0,
       documents: {
         profilePhoto: await fileUrl(d.profilePhotoKey),
         licence: await fileUrl(d.licencePhotoKey),
@@ -117,4 +122,10 @@ export async function suspendDriver(id, admin) {
   const driver = await setStatus(id, admin, { status: 'suspended' }, 'Your FoloRide driver account has been suspended.');
   await endActiveSession(driver._id, 'Driver account suspended');
   return driver;
+}
+
+export async function clearCancelLock(driverId) {
+  const d = await Driver.findByIdAndUpdate(driverId, { $set: { cancelLockedUntil: null } }, { new: true });
+  if (!d) throw new AppError(404, 'Driver not found', 'NOT_FOUND');
+  return { id: String(d._id) };
 }

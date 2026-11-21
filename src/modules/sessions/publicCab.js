@@ -17,5 +17,6 @@ export function toPublicCab(c) {
     driver: null,
     vehicle: null,
     fare: c.fare,
+    drop: c.drop,
   };
 }

@@ -420,6 +420,16 @@ export async function cancelByDriver(driver, bookingId, reasonCode = 'other') {
   await releaseSeats(updated.sessionId, updated.seats);
   await settleBookingDoc('ride', updated); // returns everything held to the rider's wallet
   await Driver.updateOne({ _id: driver._id }, { $inc: { cancelledTrips: 1 } });
+  const recent = await Booking.countDocuments({ driverId: driver._id, cancelledBy: 'driver', cancelledAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } });
+  let warning = null;
+  if (recent >= env.DRIVER_CANCEL_LOCK) {
+    const until = new Date(Date.now() + env.DRIVER_CANCEL_LOCK_HOURS * 60 * 60 * 1000);
+    await Driver.updateOne({ _id: driver._id }, { $set: { cancelLockedUntil: until } });
+    warning = `You cancelled ${recent} bookings today. You cannot go online again for ${env.DRIVER_CANCEL_LOCK_HOURS} hours after this shift.`;
+  } else if (recent >= env.DRIVER_CANCEL_WARN) {
+    warning = `You have cancelled ${recent} bookings in 24 hours. At ${env.DRIVER_CANCEL_LOCK} you will be locked from going online for ${env.DRIVER_CANCEL_LOCK_HOURS} hours.`;
+  }
+  if (warning) notifyUser(driver.userId, 'driver:warning', { recent }, { title: 'Too many cancellations', body: warning, sms: recent >= env.DRIVER_CANCEL_LOCK });
   notifyUser(
     updated.passengerId,
     'booking:status',
@@ -431,7 +441,7 @@ export async function cancelByDriver(driver, bookingId, reasonCode = 'other') {
     heading: 'Your driver cancelled',
     lines: ['We are sorry. You have not been charged' + (updated.heldKobo ? ', and the money held for this ride went back to your wallet.' : '.'), 'Open the app to find another cab on your route.'],
   });
-  return { id: String(updated._id), status: updated.status };
+  return { id: String(updated._id), status: updated.status, recentCancels: recent, warning };
 }
 
 export async function adminCancel(admin, bookingId, reason) {

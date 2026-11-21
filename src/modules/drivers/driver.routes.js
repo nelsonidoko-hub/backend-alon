@@ -24,4 +24,5 @@ export const adminDriversRouter = Router();
 adminDriversRouter.get('/', validate(driverListQuerySchema, 'query'), c.adminList);
 adminDriversRouter.post('/:id/approve', validate(idParams, 'params'), c.adminApprove);
 adminDriversRouter.post('/:id/reject', validate(idParams, 'params'), validate(rejectSchema), c.adminReject);
+adminDriversRouter.post('/:id/unlock', validate(idParams, 'params'), c.adminClearCancelLock);
 adminDriversRouter.post('/:id/suspend', validate(idParams, 'params'), c.adminSuspend);

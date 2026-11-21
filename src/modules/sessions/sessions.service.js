@@ -1,7 +1,7 @@
 import { vehicleKind } from '../drivers/vehicle.model.js';
 import { DriverSession } from './session.model.js';
 import { Booking } from '../bookings/booking.model.js';
-import { seatTier, tierFare } from './pricing.js';
+import { seatTier, tierFare, dropFare } from './pricing.js';
 import { getRouteGeometry, getFare } from '../routes/routes.service.js';
 import { announceSeats, forgetSession, getLivePosition, markOffline } from './sessions.live.js';
 import { notifyUser } from '../notifications/notifications.service.js';
@@ -48,8 +48,12 @@ export async function endActiveSession(driverId, reason = 'The driver went offli
   return session;
 }
 
-export async function startSession(driver, { routeId, lat, lng, seats }) {
+export async function startSession(driver, { routeId, lat, lng, seats, allowDrop }) {
   await assertCanGoOnline(driver.userId);
+  if (driver.cancelLockedUntil && new Date(driver.cancelLockedUntil) > new Date()) {
+    const left = Math.ceil((new Date(driver.cancelLockedUntil) - Date.now()) / 3600000);
+    throw new AppError(403, `You cancelled too many bookings, so going online is paused for about ${left} more hour${left === 1 ? '' : 's'}. Contact support if this is a mistake.`, 'CANCEL_LOCK');
+  }
   await getRouteGeometry(routeId);
   const capacity = driver.vehicleId.seatCapacity;
   if (seats !== undefined && seats > capacity) {
@@ -65,6 +69,7 @@ export async function startSession(driver, { routeId, lat, lng, seats }) {
     seatsTotal: total,
     seatsFree: total,
     seatsCapacity: capacity,
+    allowDrop: allowDrop !== false,
     lastSeen: new Date(),
     ...(hasLocation && { lastLocation: { type: 'Point', coordinates: [lng, lat] } }),
   });
@@ -161,6 +166,8 @@ export async function listLiveCabs(routeId, stopId, toStopId) {
       tier: seatTier(s.seatsTotal, s.seatsCapacity),
       baseFare: fare,
       fare: tierFare(fare, s.seatsTotal, s.seatsCapacity),
+      // Whole-cab booking: only while the driver allows it and nobody has a seat yet.
+      drop: s.allowDrop !== false && s.seatsFree === s.seatsTotal && fare != null ? { fare: dropFare(fare, s.seatsTotal, s.seatsCapacity), seats: s.seatsTotal } : null,
     });
   }
   cabs.sort((a, b) => a.etaSeconds - b.etaSeconds);
@@ -186,6 +193,7 @@ export async function listSessionBookings(driver, sessionId) {
     atStop: Boolean(b.atStopAt),
     id: String(b._id),
     status: b.status,
+    kind: b.kind || 'seat',
     seats: b.seats,
     fare: b.fare,
     paymentMethod: b.paymentMethod,

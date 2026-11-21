@@ -16,4 +16,6 @@ export const SHARE_AFTER_TRIP_MS = 60 * 60 * 1000;
 // fare x vehicle seats / seats offered (rounded up to N50), and never more than COMFORT_MAX_MULTIPLIER times the normal fare.
 export const COMFORT_MAX_MULTIPLIER = Number(process.env.COMFORT_MAX_MULTIPLIER ?? 2);
 export const MAX_SEATS_PER_BOOKING = 2;
+// A "drop" books the whole cab. Its price is every seat's fare added up, plus this premium (rounded up to N50).
+export const DROP_PREMIUM_PERCENT = Number(process.env.DROP_PREMIUM_PERCENT ?? 20);
 export const ACTIVE_BOOKING_STATUSES = ['confirmed', 'arriving', 'picked_up'];

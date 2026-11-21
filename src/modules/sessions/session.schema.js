@@ -5,6 +5,7 @@ export const startSessionSchema = z.object({
   routeId: objectId,
   lat: lat.optional(),
   lng: lng.optional(),
+  allowDrop: z.boolean().optional(), // accept whole-cab bookings (default yes)
   seats: z.number().int().min(1).max(60).optional(), // passenger seats to offer; fewer than the vehicle has = comfort ride
 });
 
