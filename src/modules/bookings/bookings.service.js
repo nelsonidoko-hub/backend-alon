@@ -1,5 +1,5 @@
 import { emailUser, appLink } from '../notifications/email.notify.js';
-import { tierFare } from '../sessions/pricing.js';
+import { tierFare, dropFare } from '../sessions/pricing.js';
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import { Booking } from './booking.model.js';
@@ -66,6 +66,7 @@ export async function presentBooking(input, { withLive = false, includeCode = tr
   const view = {
     id: String(b._id),
     status: b.status,
+    kind: b.kind || 'seat',
     seats: b.seats,
     fare: b.fare,
     farePerSeat: b.farePerSeat,
@@ -125,7 +126,7 @@ export async function presentBooking(input, { withLive = false, includeCode = tr
   return view;
 }
 
-export async function createBooking(user, { sessionId, fromStopId, toStopId, seats, paymentMethod }) {
+export async function createBooking(user, { sessionId, fromStopId, toStopId, seats, paymentMethod, drop = false }) {
   if (await Booking.exists({ passengerId: user._id, active: true })) {
     throw new AppError(409, 'You already have an active booking', 'ALREADY_BOOKED');
   }
@@ -168,10 +169,20 @@ export async function createBooking(user, { sessionId, fromStopId, toStopId, sea
     throw new AppError(409, 'This cab has already passed your stop', 'CAB_PASSED');
   }
 
-  const farePerSeat = tierFare(await getFare(session.routeId, from.stopId, to.stopId), session.seatsTotal, session.seatsCapacity);
+  const baseFare = await getFare(session.routeId, from.stopId, to.stopId);
+  let farePerSeat = tierFare(baseFare, session.seatsTotal, session.seatsCapacity);
+  let totalFare = farePerSeat * seats;
+  if (drop) {
+    // Whole cab: every seat, so only while nobody else has booked and the driver allows it.
+    if (session.allowDrop === false) throw new AppError(409, 'This driver only takes shared seats.', 'DROP_NOT_ALLOWED');
+    if (session.seatsFree !== session.seatsTotal) throw new AppError(409, 'Someone has already booked a seat in this cab, so it cannot be booked as a drop.', 'DROP_NOT_AVAILABLE');
+    seats = session.seatsTotal;
+    totalFare = dropFare(baseFare, session.seatsTotal, session.seatsCapacity);
+    farePerSeat = totalFare / seats;
+  }
 
   const bookingId = new mongoose.Types.ObjectId();
-  const heldKobo = paymentMethod === 'wallet' ? toKobo(farePerSeat * seats) : 0;
+  const heldKobo = paymentMethod === 'wallet' ? toKobo(totalFare) : 0;
   const hold = { userId: user._id, driverUserId: driver.userId, kind: 'ride', refId: String(bookingId), kobo: heldKobo };
   if (heldKobo) await holdFunds(hold);
 
@@ -199,9 +210,10 @@ export async function createBooking(user, { sessionId, fromStopId, toStopId, sea
           routeId: session.routeId,
           fromStopId,
           toStopId,
+          kind: drop ? 'drop' : 'seat',
           seats,
           farePerSeat,
-          fare: farePerSeat * seats,
+          fare: totalFare,
           code: genCode(),
           status: 'confirmed',
           active: true,
@@ -228,15 +240,15 @@ export async function createBooking(user, { sessionId, fromStopId, toStopId, sea
   notifyUser(
     driver.userId,
     'booking:created',
-    { bookingId: String(booking._id), seats, from: from.name, passenger: firstName(user.name) },
-    { title: 'New booking', body: `${seats} seat(s) booked from ${from.name}.` }
+    { bookingId: String(booking._id), seats, drop, from: from.name, passenger: firstName(user.name) },
+    { title: drop ? 'New DROP: whole cab booked' : 'New booking', body: drop ? `Whole cab booked from ${from.name}. No other riders will board.` : `${seats} seat(s) booked from ${from.name}.` }
   );
   const view = await presentBooking(booking, { withLive: true });
   emailUser(user._id, {
     subject: `Seat booked: ${view.from.name} to ${view.to.name}`,
-    heading: 'Your seat is booked',
+    heading: drop ? 'Your cab is booked' : 'Your seat is booked',
     lines: [
-      `${view.seats} seat${view.seats === 1 ? '' : 's'} reserved on ${view.route.name}. Show the code below to your driver when you board.`,
+      drop ? `The whole cab is yours on ${view.route.name}, with no other riders.` : `${view.seats} seat${view.seats === 1 ? '' : 's'} reserved on ${view.route.name}. Show the code below to your driver when you board.`,
       view.paymentMethod === 'wallet' ? `₦${view.heldNaira} is held safely in your wallet and only goes to the driver when you board.` : 'Pay the driver in cash when you board.',
     ],
     rows: [
@@ -383,6 +395,42 @@ export async function noShow(driver, bookingId) {
     { bookingId: String(updated._id), status: 'no_show' },
     { title: 'Missed your cab', body: 'The driver marked you as a no-show.', sms: true, email: true }
   );
+  return { id: String(updated._id), status: updated.status };
+}
+
+const DRIVER_CANCEL_REASONS = {
+  cant_reach: "I can't reach the stop",
+  vehicle_problem: 'Vehicle problem',
+  rider_asked: 'The rider asked me to cancel',
+  other: 'Other reason',
+};
+
+/** The driver declines or cancels a booking before pickup. The rider pays nothing, gets everything back and is told to rebook. */
+export async function cancelByDriver(driver, bookingId, reasonCode = 'other') {
+  const b = await driverBooking(driver, bookingId);
+  const reason = DRIVER_CANCEL_REASONS[reasonCode] || DRIVER_CANCEL_REASONS.other;
+  const updated = await transition(bookingId, ['confirmed', 'arriving'], 'cancelled', {
+    cancelledBy: 'driver',
+    cancelReason: reason,
+    cancelledAt: new Date(),
+    lateCancel: false,
+    cancelFeeKobo: 0, // never charge the rider for the driver's cancellation
+  });
+  if (!updated) throw invalidState(b);
+  await releaseSeats(updated.sessionId, updated.seats);
+  await settleBookingDoc('ride', updated); // returns everything held to the rider's wallet
+  await Driver.updateOne({ _id: driver._id }, { $inc: { cancelledTrips: 1 } });
+  notifyUser(
+    updated.passengerId,
+    'booking:status',
+    { bookingId: String(updated._id), status: 'cancelled', cancelledBy: 'driver' },
+    { title: 'Your driver cancelled', body: 'Sorry about that. You have not been charged. Open the app to find another cab.', sms: true, email: true }
+  );
+  emailUser(updated.passengerId, {
+    subject: 'Your driver cancelled your FoloRide booking',
+    heading: 'Your driver cancelled',
+    lines: ['We are sorry. You have not been charged' + (updated.heldKobo ? ', and the money held for this ride went back to your wallet.' : '.'), 'Open the app to find another cab on your route.'],
+  });
   return { id: String(updated._id), status: updated.status };
 }
 

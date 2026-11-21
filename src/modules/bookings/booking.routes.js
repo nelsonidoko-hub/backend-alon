@@ -5,7 +5,7 @@ import { idParams } from '../../utils/schemas.js';
 import { ratingSchema } from '../ratings/rating.schema.js';
 import {
   createBookingSchema,
-  cancelSchema,
+  cancelSchema, driverCancelSchema,
   pickupSchema,
   completeSchema,
   historyQuerySchema,
@@ -27,6 +27,7 @@ export const driverBookingRouter = Router();
 driverBookingRouter.post('/:id/pickup', validate(idParams, 'params'), validate(pickupSchema), c.driverPickup);
 driverBookingRouter.post('/:id/complete', validate(idParams, 'params'), validate(completeSchema), c.driverComplete);
 driverBookingRouter.post('/:id/rate-rider', validate(idParams, 'params'), validate(ratingSchema), c.driverRateRider);
+driverBookingRouter.post('/:id/cancel', validate(idParams, 'params'), validate(driverCancelSchema), c.driverCancel);
 driverBookingRouter.post('/:id/no-show', validate(idParams, 'params'), c.driverNoShow);
 
 export const shareRouter = Router();

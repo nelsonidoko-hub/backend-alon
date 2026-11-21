@@ -48,6 +48,10 @@ export const driverComplete = asyncHandler(async (req, res) => {
   res.json({ booking: await service.complete(req.driver, req.params.id, req.body.paymentConfirmed) });
 });
 
+export const driverCancel = asyncHandler(async (req, res) => {
+  res.json({ booking: await service.cancelByDriver(req.driver, req.params.id, req.body.reason) });
+});
+
 export const driverNoShow = asyncHandler(async (req, res) => {
   res.json({ booking: await service.noShow(req.driver, req.params.id) });
 });
